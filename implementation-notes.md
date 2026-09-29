@@ -461,3 +461,34 @@
 - Валидация синтаксиса YAML: проверка парсинга через `yaml.safe_load` на Python ➔ OK.
 - Удален временный workflow `.github/workflows/build-windows.yml` для исключения холостых сборок бинарников при обычных пушах в репозиторий.
 - Локальный прогон тестов: 114 passed за 1.78s.
+
+## 2026-09-30: Промпт 1.13 — Оформление репозитория GitHub (README EN/RU, LICENSE MIT, About Metadata)
+
+### Принятые архитектурные решения
+1. **Двуязычная документация проекта (EN/RU):**
+   - Основной `README.md` на английском языке и локализованный `README_RU.md` на русском языке.
+   - Синхронная структура обоих документов:
+     - Информативные бейджи (CI статус, релиз GitHub, лицензия MIT, платформы macOS & Windows, версия Python 3.10+).
+     - Быстрый старт: загрузка готовых DMG (macOS) и портативного ZIP (Windows), а также установка из исходников через `pip install .`.
+     - Детальный разбор проблемы «Outside of Project» и архитектуры кэширования Antigravity (`projects.json`, `trajectory_metadata_blob`, `conversation_summaries.db`, бинарный блоб `agyhub_summaries_proto.pb`, текстовые аннотации `.pbtxt`).
+     - Описание инварианта холодной записи (Cold-Disk Invariant) и механизмов предотвращения конфликтов SQLite/кэшей.
+     - Полное описание команд CLI (`audit`, `fix`, `watch`, `rollback`) с реальными ASCII-таблицами терминального вывода Rich.
+     - Описание лаунчера для Windows в один клик (`run_fix.bat`).
+     - Схема каталогов и ключевые инженерные решения архитектуры.
+     - Результаты тестирования и инструкции для контрибьюторов.
+   - Строгое соблюдение типографики русского языка в `README_RU.md`: Sentence case во всех заголовках, отсутствие Title Case и длинных тире (заменены на дефисы и двоеточия).
+2. **Открытая лицензия MIT (`LICENSE`):**
+   - Создан стандартный файл лицензии MIT с указанием копирайта: Copyright (c) 2026 Daniil Kuviko (Fuheshka).
+3. **Автоматизация настройки блока About на GitHub (`scripts/setup_github_about.sh`):**
+   - Подготовлен исполняемый bash-скрипт с поддержкой `gh repo edit`:
+     - Описание (Description): "Cross-platform CLI & utility to fix 'Outside of Project' chats and synchronize Antigravity conversations across workspaces (macOS & Windows)".
+     - Домашняя страница (Homepage): ссылка на релизы `https://github.com/Fuheshka/antigravity-chat-migrator/releases`.
+     - Тематические теги (Topics): `antigravity`, `gemini-code-assist`, `chat-migrator`, `macos`, `windows`, `sqlite`, `protobuf`, `developer-tools`, `cli`.
+   - Встроена проверка наличия репозитория на GitHub с интерактивным созданием публичного репозитория через `gh repo create` при первом запуске.
+
+### Результаты проверки
+- Валидация Markdown: оба файла проверены на целостность, отсутствие битых синтаксических конструкций и читаемость.
+- Проверка типографики: в `README_RU.md` отсутствуют длинные тире и Title Case.
+- Исполняемый скрипт: `scripts/setup_github_about.sh` проверен на синтаксис `bash -n` и сделан исполняемым (`chmod +x`).
+- Тестовый набор проекта: 114 тестов, 100% pass (1.82s).
+
