@@ -45,10 +45,26 @@ from antigravity_migrator.service import (
     MigratorService,
     SyncResult,
 )
+from antigravity_migrator.i18n import (
+    MESSAGES,
+    detect_locale,
+    get_current_locale,
+    normalize_locale,
+    set_current_locale,
+    t,
+)
+from antigravity_migrator.ui_renderer import (
+    render_audit_table,
+    render_banner,
+    render_sync_progress,
+    render_warning_cold_disk,
+)
+from antigravity_migrator.cli import app
 
 __version__ = "0.1.0"
 
 __all__ = [
+    "app",
     "PathManager",
     "DatabaseManager",
     "extract_workspace_uri",
@@ -82,5 +98,15 @@ __all__ = [
     "MigratorService",
     "AuditReport",
     "SyncResult",
+    "MESSAGES",
+    "detect_locale",
+    "get_current_locale",
+    "set_current_locale",
+    "normalize_locale",
+    "t",
+    "render_banner",
+    "render_audit_table",
+    "render_warning_cold_disk",
+    "render_sync_progress",
 ]
 
