@@ -54,6 +54,11 @@ def finalize_dmg(dmg_path: Path, vol_name: str, app_name: str) -> None:
             subprocess.run(["chflags", "hidden", str(full_p)], check=False)
             subprocess.run(["SetFile", "-a", "V", str(full_p)], check=False)
 
+    # Enable custom icon flag on mounted volume if .VolumeIcon.icns is present
+    vol_icon_p = Path(mount_point) / ".VolumeIcon.icns"
+    if vol_icon_p.exists():
+        subprocess.run(["SetFile", "-a", "C", mount_point], check=False)
+
     # Hide extension on app bundle inside DMG volume
     app_full_p = Path(mount_point) / app_name
     if app_full_p.exists():

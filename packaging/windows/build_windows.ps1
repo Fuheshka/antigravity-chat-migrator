@@ -64,10 +64,20 @@ New-Item -ItemType Directory -Force -Path $DistWin | Out-Null
 New-Item -ItemType Directory -Force -Path $BuildWin | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $RepoRoot "packaging\assets") | Out-Null
 
-# 4. Ensure AppIcon.ico exists
+# 4. Ensure AppIcon.ico and app.ico exist and are up to date
 $IcoPath = Join-Path $RepoRoot "packaging\assets\AppIcon.ico"
-if (-not (Test-Path $IcoPath)) {
-    Write-Host "--> Generating Windows AppIcon.ico..." -ForegroundColor Yellow
+$AppIcoPath = Join-Path $RepoRoot "packaging\assets\app.ico"
+$PngPath = Join-Path $RepoRoot "packaging\assets\AppIcon.png"
+
+$NeedsGen = (-not (Test-Path $IcoPath)) -or (-not (Test-Path $AppIcoPath))
+if (-not $NeedsGen -and (Test-Path $PngPath)) {
+    if ((Get-Item $PngPath).LastWriteTime -gt (Get-Item $IcoPath).LastWriteTime) {
+        $NeedsGen = $true
+    }
+}
+
+if ($NeedsGen) {
+    Write-Host "--> Generating Windows AppIcon.ico & app.ico from AppIcon.png..." -ForegroundColor Yellow
     & $PythonBin (Join-Path $RepoRoot "packaging\windows\generate_ico.py")
 }
 

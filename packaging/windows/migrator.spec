@@ -10,11 +10,15 @@ SPEC_DIR = Path(__file__).resolve().parent if '__file__' in globals() else Path(
 if (SPEC_DIR / "entrypoint.py").exists():
     BASE_DIR = SPEC_DIR.parent.parent
     ENTRYPOINT = str(SPEC_DIR / "entrypoint.py")
-    ICON_PATH = str(SPEC_DIR.parent / "assets" / "AppIcon.ico")
+    assets_dir = SPEC_DIR.parent / "assets"
+    ico_file = assets_dir / "app.ico" if (assets_dir / "app.ico").exists() else assets_dir / "AppIcon.ico"
+    ICON_PATH = str(ico_file)
 else:
     BASE_DIR = Path(os.getcwd())
     ENTRYPOINT = str(BASE_DIR / "packaging" / "windows" / "entrypoint.py")
-    ICON_PATH = str(BASE_DIR / "packaging" / "assets" / "AppIcon.ico")
+    assets_dir = BASE_DIR / "packaging" / "assets"
+    ico_file = assets_dir / "app.ico" if (assets_dir / "app.ico").exists() else assets_dir / "AppIcon.ico"
+    ICON_PATH = str(ico_file)
 
 SRC_DIR = str(BASE_DIR / "src")
 

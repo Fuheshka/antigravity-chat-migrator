@@ -88,8 +88,8 @@ mkdir -p "${REPO_ROOT}/build/macos"
 mkdir -p "${REPO_ROOT}/packaging/assets"
 
 # 1. Ensure ICNS and Background Assets are built
-if [ ! -f "${REPO_ROOT}/packaging/assets/AppIcon.icns" ]; then
-    echo "--> Compiling AppIcon.icns..."
+if [ ! -f "${REPO_ROOT}/packaging/assets/AppIcon.icns" ] || [ "${REPO_ROOT}/packaging/assets/AppIcon.png" -nt "${REPO_ROOT}/packaging/assets/AppIcon.icns" ]; then
+    echo "--> Compiling AppIcon.icns from AppIcon.png..."
     ${PYTHON_BIN} "${REPO_ROOT}/packaging/macos/generate_icns.py"
 fi
 

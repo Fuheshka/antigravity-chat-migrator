@@ -74,10 +74,14 @@ if not exist "%DIST_WIN%" mkdir "%DIST_WIN%"
 if not exist "%BUILD_WIN%" mkdir "%BUILD_WIN%"
 if not exist "%REPO_ROOT%\packaging\assets" mkdir "%REPO_ROOT%\packaging\assets"
 
-rem 4. Ensure AppIcon.ico exists
+rem 4. Ensure AppIcon.ico and app.ico exist
 set "ICO_PATH=%REPO_ROOT%\packaging\assets\AppIcon.ico"
+set "APP_ICO_PATH=%REPO_ROOT%\packaging\assets\app.ico"
 if not exist "%ICO_PATH%" (
-    echo Generating AppIcon.ico...
+    echo Generating AppIcon.ico and app.ico...
+    %PYTHON_BIN% "%REPO_ROOT%\packaging\windows\generate_ico.py"
+) else if not exist "%APP_ICO_PATH%" (
+    echo Generating AppIcon.ico and app.ico...
     %PYTHON_BIN% "%REPO_ROOT%\packaging\windows\generate_ico.py"
 )
 

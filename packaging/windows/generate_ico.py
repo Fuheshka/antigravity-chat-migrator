@@ -20,5 +20,7 @@ def generate_ico(src_png: Path, out_ico: Path) -> None:
 if __name__ == "__main__":
     base_dir = Path(__file__).resolve().parent.parent
     src = base_dir / "assets" / "AppIcon.png"
-    out = base_dir / "assets" / "AppIcon.ico"
-    generate_ico(src, out)
+    out_app = base_dir / "assets" / "app.ico"
+    out_app_icon = base_dir / "assets" / "AppIcon.ico"
+    generate_ico(src, out_app)
+    generate_ico(src, out_app_icon)
