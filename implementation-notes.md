@@ -378,3 +378,53 @@
 - Все существующие тесты: 103 passed.
 - Калибровка размеров текстовой плашки DMG: левая белая карточка под иконкой расширена до 176px по ширине и 54px по высоте (`y = 206..260px`), что обеспечивает полное покрытие двухстрочного названия приложения (`Antigravity Chat \n Migrator.app` / `Migrator`) без выпадения второй строки на темный фон. На бандл наложено свойство `SetFile -a E` для скрытия расширения `.app`.
 - В каталог промптов (`01 Каталог промптов Vibe-Coding Pipeline.md`) добавлен Промпт 4.5 на разработку уникальной фирменной иконки приложения (PNG 1024x1024, ICNS, ICO) с обязательным этапом согласования графики с пользователем.
+
+## 2026-09-29: Промпт 1.11 — Автономная сборка для Windows (PyInstaller) и портативный ZIP-дистрибутив
+
+### Принятые архитектурные решения
+1. **Спецификация PyInstaller под Windows (`packaging/windows/migrator.spec`):**
+   - Конфигурация для сборки standalone консольного бинарника `agy-migrator.exe`:
+     - Режим single-file (`EXE` onefile bundle) с полным включением runtime Python, SQLite3, Typer, Rich и всех модулей пакета `antigravity_migrator`.
+     - Точка входа `packaging/windows/entrypoint.py`.
+     - Привязка нативной multi-resolution иконки `packaging/assets/AppIcon.ico` (разрешения от 16x16 до 256x256).
+     - Консольный режим (`console=True`) для отображения интерактивного Rich UI и таблиц аудита.
+2. **Генератор multi-resolution Windows ICO (`packaging/windows/generate_ico.py`):**
+   - Автоматическая конвертация мастер-иконки `packaging/assets/AppIcon.png` (1024x1024) в Windows Icon Resource (`.ico`) с 7 встроенными слоями: `16x16, 24x24, 32x32, 48x48, 64x64, 128x128, 256x256` RGBA.
+3. **Скрипты сборки под Windows (`build_windows.ps1` и `build_windows.bat`):**
+   - Автоматическое определение интерпретатора Python (`.venv\Scripts\python.exe` ➔ `py -3` ➔ `python`).
+   - Автоматическая проверка и доустановка зависимостей сборки (`pyinstaller`, `Pillow`).
+   - Автогенерация иконки `AppIcon.ico` при ее отсутствии.
+   - Компиляция standalone бинарника в `dist/windows/agy-migrator.exe`.
+   - Автоматическое формирование портативного стейджинга `dist/windows/staging/Antigravity-Chat-Migrator/`:
+     - `agy-migrator.exe`
+     - `run_fix.bat`
+     - `README_WINDOWS.txt`
+   - Архивирование в портативный дистрибутив `dist/Antigravity-Chat-Migrator-Windows-x64.zip` через PowerShell `Compress-Archive` или fallback на встроенную в Windows утилиту `tar -a -c -f`.
+   - Поддержка параметров `--clean` (очистка временных папок `build/windows` и `dist/windows`) и `--nozip` (сборка только `.exe`).
+4. **Однокликовый лаунчер для пользователей (`packaging/windows/run_fix.bat`):**
+   - Работает в профиле обычного пользователя без требования прав администратора (`chcp 65001` UTF-8).
+   - Проверяет запущенные процессы `Antigravity.exe` через `tasklist` и предупреждает о необходимости закрыть IDE перед синхронизацией.
+   - Выполняет диагностику без изменений (`agy-migrator.exe audit`).
+   - Запрашивает интерактивное подтверждение на запуск исправления (`agy-migrator.exe fix`).
+   - Автоматически создает резервную копию базы диалогов и кэшей перед внесением правок.
+5. **Двуязычная документация пакета (`packaging/windows/README_WINDOWS.txt`):**
+   - Описание назначения утилиты, быстрый старт в 1 клик, команды ручного запуска из CLI (`audit`, `fix`, `watch`, `rollback`), расположение данных на Windows (`%USERPROFILE%\.gemini\...`) и системные требования.
+6. **Подтверждение работы путей `%USERPROFILE%\.gemini\` на Windows без падений:**
+   - Написан специализированный набор тестов `tests/test_windows_paths.py` (5 тестов):
+     - Разрешение корневых директорий данных через `%USERPROFILE%` (`Path.home() / ".gemini" / ...`).
+     - Нормализация путей с обратными слэшами (`C:\Users\...`) в канонические `file:///C:/Users/...` URIs.
+     - Корректная капитализация букв дисков (`d:\...` ➔ `file:///D:/...`).
+     - Сохранение и загрузка дескрипторов проектов с путями Windows.
+7. **CI/CD автоматизация Windows сборки (`.github/workflows/build-windows.yml`):**
+   - Настроен GitHub Actions workflow на раннере `windows-latest` с тестированием pytest, компиляцией бинарника через `build_windows.ps1` и выгрузкой артефакта `Antigravity-Chat-Migrator-Windows-x64.zip`.
+
+### Результаты проверки
+- Синтаксис batch-скриптов: `packaging/windows/build_windows.bat` и `packaging/windows/run_fix.bat` проверены на сбалансированность скобок, корректность меток `:label` и переходов `goto`.
+- Синтаксис PowerShell: `packaging/windows/build_windows.ps1` проверен на сбалансированность скобок и блоков.
+- PyInstaller spec: `packaging/windows/migrator.spec` валидирован через Python AST и mock-выполнение PyInstaller environment.
+- Набор тестов Windows упаковки: `tests/test_packaging_windows.py` (6 тестов) — 100% pass.
+- Набор тестов путей Windows: `tests/test_windows_paths.py` (5 тестов) — 100% pass.
+- Общий тестовый набор проекта: 114 тестов, 100% pass (1.91s).
+
+
+
