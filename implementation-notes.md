@@ -426,5 +426,37 @@
 - Набор тестов путей Windows: `tests/test_windows_paths.py` (5 тестов) — 100% pass.
 - Общий тестовый набор проекта: 114 тестов, 100% pass (1.91s).
 
+## 2026-09-30: Промпт 1.12 — CI/CD пайплайны GitHub Actions (Кроссплатформенное тестирование и релизная сборка)
 
+### Принятые архитектурные решения
+1. **Матрица кроссплатформенного тестирования (`.github/workflows/ci.yml`):**
+   - Триггеры: пуши и pull-реквесты в ветки `main` и `dev`, а также ручной запуск `workflow_dispatch`.
+   - Игнорирование изменений в документации (`paths-ignore: ["**.md", "docs/**"]`) для экономии минут раннеров.
+   - Матрица платформ и версий Python:
+     - ОС: `ubuntu-latest`, `macos-latest`, `windows-latest`.
+     - Python: `3.10`, `3.11`, `3.12`.
+   - Кэширование pip (`cache: "pip"` в `actions/setup-python@v5`).
+   - Минимально необходимые права: `permissions: contents: read`.
+   - Запуск полного тестового набора `pytest -v` на каждой платформе.
 
+2. **Кроссплатформенный конвейер сборки и публикации релизов (`.github/workflows/release.yml`):**
+   - Триггеры: создание тегов версий `v*.*.*` (`push.tags: ["v*.*.*"]`) и ручной запуск `workflow_dispatch` с параметрами (тег и флаг draft).
+   - Минимально необходимые права: `permissions: contents: write` на уровне workflow для создания GitHub Release, `contents: read` на джобах сборки.
+   - **Job 1: `build-macos` (macOS runner):**
+     - Компиляция universal2 бинарника с fallback на нативную архитектуру runner (`packaging/macos/build_macos.sh --clean --arch universal2 || ./packaging/macos/build_macos.sh --clean`).
+     - Сборка Apple HIG-совместимого DMG дистрибутива (`Antigravity-Chat-Migrator-macOS.dmg`) с кастомным фоном и иконкой.
+     - Сохранение отдельного CLI-бинарника `agy-migrator-macos` для работы из терминала.
+     - Загрузка артефактов через `actions/upload-artifact@v4` (`macos-dist`).
+   - **Job 2: `build-windows` (Windows runner):**
+     - Компиляция standalone `agy-migrator.exe` и портативного архива `dist/Antigravity-Chat-Migrator-Windows-x64.zip` через `build_windows.ps1 -Clean`.
+     - Загрузка артефактов через `actions/upload-artifact@v4` (`windows-dist`).
+   - **Job 3: `publish-release` (Ubuntu runner):**
+     - Зависимость от обоих этапов сборки (`needs: [build-macos, build-windows]`).
+     - Консолидация всех артефактов в единую директорию через `actions/download-artifact@v4` (`merge-multiple: true`).
+     - Расчет контрольных сумм `SHA256SUMS.txt` для всех собранных файлов с исключением самого манифеста.
+     - Идемпотентная публикация релиза через стандартный CLI GitHub (`gh release create` с флагом `--generate-notes` и опциональным `--draft`, либо fallback на `gh release upload --clobber` при повторном запуске).
+
+### Результаты проверки
+- Валидация синтаксиса и схемы GitHub Actions: `actionlint` успешно прошел для обоих файлов без ошибок и предупреждений (`actionlint .github/workflows/*.yml` ➔ exit code 0).
+- Валидация синтаксиса YAML: проверка парсинга через `yaml.safe_load` на Python ➔ OK.
+- Локальный прогон тестов: 114 passed за 1.78s.

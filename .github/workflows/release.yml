@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (leave empty to use ref)"
+        required: false
+        default: ""
+      draft:
+        description: "Create as draft release"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS Distribution (DMG & CLI)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev]
+
+      - name: Run unit & regression tests
+        run: |
+          pytest -v
+
+      - name: Build macOS DMG and Standalone Executable
+        run: |
+          chmod +x packaging/macos/build_macos.sh
+          # Build universal2 if supported by runner, fallback to native runner architecture
+          ./packaging/macos/build_macos.sh --clean --arch universal2 || ./packaging/macos/build_macos.sh --clean
+          cp dist/macos/agy-migrator dist/macos/agy-migrator-macos
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dist
+          path: |
+            dist/macos/Antigravity-Chat-Migrator-macOS.dmg
+            dist/macos/agy-migrator-macos
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows Distribution (ZIP & EXE)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev]
+
+      - name: Run unit & regression tests
+        run: |
+          pytest -v
+
+      - name: Build standalone executable and portable ZIP
+        shell: pwsh
+        run: |
+          .\packaging\windows\build_windows.ps1 -Clean
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: |
+            dist/Antigravity-Chat-Migrator-Windows-x64.zip
+            dist/windows/agy-migrator.exe
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish Release & Checksums
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256 Checksums
+        run: |
+          cd release-artifacts
+          find . -maxdepth 1 -type f ! -name "SHA256SUMS.txt" -exec sha256sum {} + | sed 's|^\./||' | sort -k 2 > SHA256SUMS.txt
+          echo "Generated SHA256SUMS.txt:"
+          cat SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET_TAG="${{ inputs.tag }}"
+          if [ -z "$TARGET_TAG" ]; then
+            TARGET_TAG="${{ github.ref_name }}"
+          fi
+          
+          if [ -z "$TARGET_TAG" ] || [ "$TARGET_TAG" = "main" ] || [ "$TARGET_TAG" = "dev" ]; then
+            TARGET_TAG="v0.1.0"
+          fi
+
+          DRAFT_FLAG=""
+          if [ "${{ inputs.draft }}" = "true" ]; then
+            DRAFT_FLAG="--draft"
+          fi
+
+          echo "Target Release Tag: ${TARGET_TAG}"
+          echo "Draft Flag: ${DRAFT_FLAG}"
+
+          if gh release view "${TARGET_TAG}" &>/dev/null; then
+            echo "Release ${TARGET_TAG} already exists. Uploading artifacts..."
+            gh release upload "${TARGET_TAG}" release-artifacts/* --clobber
+          else
+            echo "Creating new release ${TARGET_TAG}..."
+            gh release create "${TARGET_TAG}" \
+              --title "Antigravity Chat Migrator ${TARGET_TAG}" \
+              --generate-notes \
+              ${DRAFT_FLAG} \
+              release-artifacts/*
+          fi
