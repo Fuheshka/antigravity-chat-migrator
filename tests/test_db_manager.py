@@ -9,8 +9,10 @@ from antigravity_migrator.proto_codec import (
 )
 from antigravity_migrator.db_manager import (
     DatabaseManager,
+    extract_project_id,
     extract_workspace_uri,
     load_conversation_summaries,
+    read_trajectory_metadata,
     update_summary_record,
     update_trajectory_metadata,
 )
@@ -276,7 +278,28 @@ class TestDatabaseManager(unittest.TestCase):
         self.assertEqual(records["fresh-1"]["project_id"], "proj-fresh")
         self.assertEqual(records["fresh-1"]["raw_summary"], b"fresh-blob")
 
+    def test_read_trajectory_metadata_and_extract_project_id(self):
+        blob = encode_field(18, 2, "my-target-project-id")
+        db_path = self._create_sample_trajectory_db(
+            self.base_dir / "conv_pid.db", blob=blob
+        )
+        read_blob = read_trajectory_metadata(db_path)
+        self.assertEqual(read_blob, blob)
+
+        pid = extract_project_id(db_path)
+        self.assertEqual(pid, "my-target-project-id")
+
+        # Missing file returns None
+        self.assertIsNone(extract_project_id(self.base_dir / "nonexistent.db"))
+        self.assertIsNone(read_trajectory_metadata(self.base_dir / "nonexistent.db"))
+
+        # Empty db returns None
+        empty_db = self._create_sample_trajectory_db(self.base_dir / "empty.db", blob=None)
+        self.assertIsNone(extract_project_id(empty_db))
+        self.assertIsNone(read_trajectory_metadata(empty_db))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

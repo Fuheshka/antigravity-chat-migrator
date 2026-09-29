@@ -27,6 +27,24 @@ from antigravity_migrator.project_registry import (
     normalize_workspace_uri,
     register_new_project,
 )
+from antigravity_migrator.backup_manager import (
+    BackupManager,
+    create_snapshot,
+    list_snapshots,
+    restore_snapshot,
+)
+from antigravity_migrator.process_watcher import (
+    ProcessWatcher,
+    get_running_pids,
+    is_antigravity_process_name,
+    is_antigravity_running,
+    wait_for_shutdown,
+)
+from antigravity_migrator.service import (
+    AuditReport,
+    MigratorService,
+    SyncResult,
+)
 
 __version__ = "0.1.0"
 
@@ -34,6 +52,8 @@ __all__ = [
     "PathManager",
     "DatabaseManager",
     "extract_workspace_uri",
+    "extract_project_id",
+    "read_trajectory_metadata",
     "update_trajectory_metadata",
     "load_conversation_summaries",
     "update_summary_record",
@@ -50,5 +70,17 @@ __all__ = [
     "load_registered_projects",
     "normalize_workspace_uri",
     "register_new_project",
+    "BackupManager",
+    "create_snapshot",
+    "list_snapshots",
+    "restore_snapshot",
+    "ProcessWatcher",
+    "is_antigravity_process_name",
+    "get_running_pids",
+    "is_antigravity_running",
+    "wait_for_shutdown",
+    "MigratorService",
+    "AuditReport",
+    "SyncResult",
 ]
 

@@ -16,6 +16,8 @@ from antigravity_migrator.proto_codec import parse_proto
 __all__ = [
     "DatabaseManager",
     "extract_workspace_uri",
+    "extract_project_id",
+    "read_trajectory_metadata",
     "update_trajectory_metadata",
     "load_conversation_summaries",
     "update_summary_record",
@@ -76,6 +78,43 @@ class DatabaseManager:
                             return uri
 
                 return None
+        except Exception:
+            return None
+
+    @staticmethod
+    def read_trajectory_metadata(db_path: Union[Path, str]) -> Optional[bytes]:
+        """Read the raw Protobuf blob from trajectory_metadata_blob (id = 'main')."""
+        path = Path(db_path)
+        if not path.is_file():
+            return None
+        try:
+            with sqlite3.connect(str(path), timeout=CONNECT_TIMEOUT_SEC) as conn:
+                conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT data FROM trajectory_metadata_blob WHERE id = 'main'"
+                )
+                row = cur.fetchone()
+                if row and row[0]:
+                    return bytes(row[0])
+                return None
+        except Exception:
+            return None
+
+    @staticmethod
+    def extract_project_id(db_path: Union[Path, str]) -> Optional[str]:
+        """Extract project_id (Field 18) from trajectory_metadata_blob (id = 'main')."""
+        raw_blob = DatabaseManager.read_trajectory_metadata(db_path)
+        if not raw_blob:
+            return None
+        try:
+            fields = parse_proto(raw_blob)
+            for fnum, wtype, payload in fields:
+                if fnum == 18 and wtype == 2 and isinstance(payload, (bytes, bytearray)):
+                    pid = payload.decode("utf-8", errors="replace").strip()
+                    if pid:
+                        return pid
+            return None
         except Exception:
             return None
 
@@ -240,6 +279,8 @@ class DatabaseManager:
 
 # Module-level aliases
 extract_workspace_uri = DatabaseManager.extract_workspace_uri
+extract_project_id = DatabaseManager.extract_project_id
+read_trajectory_metadata = DatabaseManager.read_trajectory_metadata
 update_trajectory_metadata = DatabaseManager.update_trajectory_metadata
 load_conversation_summaries = DatabaseManager.load_conversation_summaries
 update_summary_record = DatabaseManager.update_summary_record
