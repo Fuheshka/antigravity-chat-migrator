@@ -804,3 +804,25 @@
 - `tests/test_gui_assets.py`: 18 тестов, 100% pass (0.11s).
 - Общий тестовый набор проекта: 166 тестов, 100% pass (1.83s).
 - Интеграционная верификация в Node.js DOM: проверены все клики по сайдбару, фильтрация подкатегорий, обновление значений бейджей и вызов инспектора.
+
+## 2026-09-30: Промпт 6.4 — Обновление тестов ассетов под сайдбарную разметку и пересборка бандла macOS
+
+### Принятые архитектурные и инженерные решения
+1. **Обновление тестов статических ассетов (`tests/test_gui_assets.py`):**
+   - Добавлен тест `test_html_sidebar_layout_and_navigation`: проверяет тег `<aside class="sidebar">`, класс корневого макета `.app-layout`, наличие индикаторов счетчиков категорий `.badge-count` (`#valTotal`, `#valOutside`, `#valMissing`, `#valUnregistered`, `#valBound`), и полноэкранных представлений (`#view-chats`, `#view-sync`, `#view-backups`, `#view-settings`).
+   - Обновлен тест `test_html_ascii_banner`: добавлена строгая проверка отсутствия тяжелого ASCII-баннера в основном потоке таблицы диалогов (`#view-chats`) и подтверждение его безопасного размещения в экране настроек (`#view-settings`).
+   - Расширен `test_css_syntax_and_theming`: включены селекторы `.sidebar`, `.app-layout`, `.badge-count`, `.view-pane`.
+2. **Сборка и дистрибуция приложения macOS (`packaging/macos/build_macos.sh`):**
+   - Скомпилирован автономный бинарный файл `dist/macos/agy-migrator` (Mach-O 64-bit executable arm64) с интеграцией WebKit / pywebview.
+   - Собрано и подписано приложение `dist/macos/Antigravity Chat Migrator.app` (ad-hoc подпись).
+   - Сформирован чистый DMG-образ `dist/macos/Antigravity-Chat-Migrator-macOS.dmg` по стандартам Apple HIG с Retina фоном и фиксацией границ Finder без горизонтального скролла.
+3. **Установка в `/Applications/` и визуальная верификация:**
+   - Бандл `Antigravity Chat Migrator.app` установлен в системный каталог `/Applications/`.
+   - Приложение успешно запущено (`open "/Applications/Antigravity Chat Migrator.app"`).
+   - Захвачен скриншот окна запущенного приложения (`/tmp/migrator_window.png`): подтверждена двухпанельная компоновка macOS Split View, чистый Apple Dark Glass стиль, реактивные счетчики диалогов (418 всего, 5 вне проектов, 6 без названий, 2 вне реестра, 413 привязаны к проектам), статус процессов с пульсирующей точкой, отсутствие ASCII-баннера в основном потоке таблицы и плавная работа интерфейса.
+
+### Результаты тестирования
+- `tests/test_gui_assets.py`: 19 тестов, 100% pass (0.12s).
+- Общий тестовый набор проекта: 167 тестов, 100% pass (1.89s).
+- Бандл в `/Applications/` полностью функционален.
+

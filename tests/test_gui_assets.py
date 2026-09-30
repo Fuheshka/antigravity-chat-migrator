@@ -148,11 +148,30 @@ def test_html_document_structure(html_content: str, html_parsed: _HTMLValidator)
 
 
 # ============================================================================
-# 3. ASCII Art Banner Element
+# 3. Navigation Sidebar, Category Badges & Screen Views
 # ============================================================================
 
+def test_html_sidebar_layout_and_navigation(html_parsed: _HTMLValidator, html_content: str):
+    """Verify presence of sidebar, category count badges, and dedicated screen views."""
+    # 1. Sidebar element and container classes
+    assert "aside" in html_parsed.tags
+    assert "sidebar" in html_parsed.classes
+    assert "app-layout" in html_parsed.classes
+    assert re.search(r"<aside[^>]*class=[\"'][^\"']*sidebar", html_content) is not None
+
+    # 2. Category badge count indicators (.badge-count)
+    assert "badge-count" in html_parsed.classes
+    required_badges = {"valTotal", "valOutside", "valMissing", "valUnregistered", "valBound"}
+    assert required_badges.issubset(html_parsed.ids), f"Missing badges: {required_badges - html_parsed.ids}"
+
+    # 3. Navigation view screens (#view-chats, #view-sync, #view-backups, #view-settings)
+    required_views = {"view-chats", "view-sync", "view-backups", "view-settings"}
+    assert required_views.issubset(html_parsed.ids), f"Missing views: {required_views - html_parsed.ids}"
+
+
 def test_html_ascii_banner(html_parsed: _HTMLValidator, html_content: str):
-    """Verify presence of ASCII art banner card and terminal styling elements."""
+    """Verify ASCII art banner is tucked into settings view and absent from main chat flow."""
+    # Banner elements exist in DOM (inside Settings view)
     assert "asciiBanner" in html_parsed.ids
     assert "ascii-art" in html_parsed.classes
     assert "banner-card" in html_parsed.classes
@@ -165,6 +184,18 @@ def test_html_ascii_banner(html_parsed: _HTMLValidator, html_content: str):
 
     # Text content of ASCII art banner
     assert "antigravity-core" in html_content
+
+    # Strict check: Old bulky ASCII banner is ABSENT from main conversations flow (#view-chats)
+    chats_view_match = re.search(r'<section id="view-chats"[^>]*>(.*?)</section>', html_content, re.DOTALL)
+    assert chats_view_match is not None, "Section #view-chats not found in HTML"
+    chats_inner = chats_view_match.group(1)
+    assert "asciiBanner" not in chats_inner, "ASCII banner must not be present in main conversations flow (#view-chats)"
+    assert "ascii-art" not in chats_inner, "ASCII art class must not be present in main conversations flow (#view-chats)"
+
+    # Banner is properly housed inside settings view (#view-settings)
+    settings_view_match = re.search(r'<section id="view-settings"[^>]*>(.*?)</section>', html_content, re.DOTALL)
+    assert settings_view_match is not None, "Section #view-settings not found in HTML"
+    assert "asciiBanner" in settings_view_match.group(1), "ASCII banner must be inside settings screen (#view-settings)"
 
 
 # ============================================================================
@@ -271,6 +302,10 @@ def test_css_syntax_and_theming(css_content: str):
 
     # Core theme classes
     for selector in [
+        ".sidebar",
+        ".app-layout",
+        ".badge-count",
+        ".view-pane",
         ".ascii-art",
         ".metrics-grid",
         ".metric-card",
