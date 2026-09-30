@@ -100,6 +100,19 @@
       lblAuthor: 'Автор и разработка',
       authorText: 'Даниил К. (Fuheshka)',
       exportSuccess: 'Список диалогов экспортирован',
+      inspectorTitle: 'Инспектор диалога',
+      inspectorId: 'ID диалога',
+      inspectorTitleLabel: 'Название диалога',
+      inspectorWorkspace: 'Рабочая папка',
+      inspectorProject: 'Привязка к проекту',
+      inspectorAnnotation: 'Аннотация .pbtxt',
+      inspectorAnnotationPresent: 'Присутствует',
+      inspectorAnnotationMissing: 'Отсутствует',
+      inspectorStatus: 'Текущий статус',
+      inspectorBtnCopyId: 'Копировать ID',
+      inspectorBtnFix: 'Точечное исправление',
+      inspectorFixSuccess: 'Диалог успешно исправлен',
+      inspectorFixFailed: 'Не удалось исправить диалог',
     },
     en: {
       appTitle: 'Antigravity Chat Migrator',
@@ -192,6 +205,19 @@
       lblAuthor: 'Author & credits',
       authorText: 'Daniil K. (Fuheshka)',
       exportSuccess: 'Conversations exported successfully',
+      inspectorTitle: 'Conversation inspector',
+      inspectorId: 'Conversation ID',
+      inspectorTitleLabel: 'Conversation title',
+      inspectorWorkspace: 'Workspace folder',
+      inspectorProject: 'Project binding',
+      inspectorAnnotation: 'Annotation .pbtxt',
+      inspectorAnnotationPresent: 'Present',
+      inspectorAnnotationMissing: 'Missing',
+      inspectorStatus: 'Current status',
+      inspectorBtnCopyId: 'Copy ID',
+      inspectorBtnFix: 'Fix this chat',
+      inspectorFixSuccess: 'Conversation repaired successfully',
+      inspectorFixFailed: 'Failed to repair conversation',
     }
   };
 
@@ -207,6 +233,8 @@
     backups: [],
     systemInfo: null,
     isBusy: false,
+    currentView: 'chats',
+    selectedConversation: null,
   };
 
   function t(key, params = {}) {
@@ -226,7 +254,10 @@
     } catch (_) {}
 
     document.documentElement.lang = newLang;
-    document.getElementById('langCurrent').textContent = newLang.toUpperCase();
+    const langCur = document.getElementById('langCurrent');
+    if (langCur) {
+      langCur.textContent = newLang.toUpperCase();
+    }
 
     // Update all data-i18n elements
     document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -247,6 +278,10 @@
     updateProcessBadgeUI();
     renderTable();
     updateFooterCount();
+
+    if (state.selectedConversation) {
+      openInspectorModal(state.selectedConversation);
+    }
   }
 
   // --- 3. Mock API for Browser Preview / Standalone Offline Testing ---
@@ -268,11 +303,11 @@
       warning: null,
     }),
     run_audit: async () => ({
-      total_conversations: 4,
+      total_conversations: 5,
       bound_to_projects: 2,
       outside_of_project: 1,
       missing_annotations: 1,
-      unregistered_workspaces: ['/Users/demo/projects/sandbox'],
+      unregistered_workspaces: ['/Users/demo/projects/sandbox-unreg'],
       conversations: [
         {
           id: '0199a5e1-8842-70b3-90bd-1100aa223344',
@@ -306,13 +341,21 @@
           project_name: 'sandbox',
           status: 'missing_annotation',
         },
+        {
+          id: '0199a5e5-cc86-74f7-a4f1-5544ee667788',
+          title: 'Research Unregistered Workspace History',
+          workspace_uri: 'file:///Users/demo/projects/sandbox-unreg',
+          project_id: 'proj-sandbox-unreg',
+          project_name: 'sandbox-unreg',
+          status: 'unregistered_workspace',
+        },
       ]
     }),
     run_fix: async (dry_run, auto_register) => ({
       success: true,
       dry_run: Boolean(dry_run),
       backup_path: '/Users/demo/.gemini/antigravity/backups/snapshot_2026-09-30_12-00-00',
-      conversations_scanned: 4,
+      conversations_scanned: 5,
       conversations_updated: 2,
       annotations_created: 1,
       projects_registered: 1,
@@ -377,9 +420,25 @@
       badge.className = 'badge-status badge-running';
       const count = state.pids.length || 1;
       const pidsStr = state.pids.length ? state.pids.join(', ') : 'active';
-      badgeText.textContent = state.lang === 'ru'
-        ? `IDE активна (${count})`
-        : `IDE active (${count})`;
+
+      let countStr = '';
+      if (state.lang === 'ru') {
+        const lastDigit = count % 10;
+        const lastTwoDigits = count % 100;
+        if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
+          countStr = `${count} процессов`;
+        } else if (lastDigit === 1) {
+          countStr = `${count} процесс`;
+        } else if (lastDigit >= 2 && lastDigit <= 4) {
+          countStr = `${count} процесса`;
+        } else {
+          countStr = `${count} процессов`;
+        }
+        badgeText.textContent = `IDE активна (${countStr})`;
+      } else {
+        countStr = count === 1 ? `${count} process` : `${count} processes`;
+        badgeText.textContent = `IDE active (${countStr})`;
+      }
 
       if (tooltip) {
         const pidsHtml = state.pids.length
@@ -412,8 +471,8 @@
     } else {
       badge.className = 'badge-status badge-idle';
       badgeText.textContent = state.lang === 'ru'
-        ? 'Холодный диск'
-        : 'Cold disk';
+        ? 'IDE остановлена'
+        : 'IDE stopped';
 
       if (tooltip) {
         if (state.lang === 'ru') {
@@ -472,15 +531,17 @@
       list = list.filter((c) => c.status === 'ok');
     }
 
-    // Search query matching
+    // Search query matching in real time
     const q = state.searchQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((c) => {
         const titleMatch = (c.title || '').toLowerCase().includes(q);
-        const wsMatch = (c.workspace_uri || '').toLowerCase().includes(q);
-        const projMatch = (c.project_name || '').toLowerCase().includes(q);
+        const wsRawMatch = (c.workspace_uri || '').toLowerCase().includes(q);
+        const wsCleanMatch = cleanWorkspaceDisplay(c.workspace_uri).toLowerCase().includes(q);
+        const projNameMatch = (c.project_name || '').toLowerCase().includes(q);
+        const projIdMatch = (c.project_id || '').toLowerCase().includes(q);
         const idMatch = (c.id || '').toLowerCase().includes(q);
-        return titleMatch || wsMatch || projMatch || idMatch;
+        return titleMatch || wsRawMatch || wsCleanMatch || projNameMatch || projIdMatch || idMatch;
       });
     }
 
@@ -492,17 +553,23 @@
   function renderTable() {
     const tbody = document.getElementById('tableBody');
     const emptyState = document.getElementById('emptyState');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     if (!state.filteredList.length) {
-      emptyState.classList.remove('hidden');
+      if (emptyState) emptyState.classList.remove('hidden');
       return;
     }
 
-    emptyState.classList.add('hidden');
+    if (emptyState) emptyState.classList.add('hidden');
+
+    const container = (typeof document.createDocumentFragment === 'function')
+      ? document.createDocumentFragment()
+      : tbody;
 
     state.filteredList.forEach((item) => {
       const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
 
       // Status pill
       let statusClass = 'status-ok';
@@ -540,7 +607,7 @@
           <span class="cell-project">${escapeHtml(item.project_name || '—')}</span>
         </td>
         <td>
-          <span class="cell-id" data-copy-id="${escapeHtml(item.id || '')}" title="Копировать ID">
+          <span class="cell-id" data-copy-id="${escapeHtml(item.id || '')}" title="${escapeHtml(t('inspectorBtnCopyId') || 'Копировать ID')}">
             ${escapeHtml(shortId)}…
             <svg style="width: 11px; height: 11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -550,10 +617,22 @@
         </td>
       `;
 
-      tbody.appendChild(tr);
+      // Row click opens the conversation inspector modal
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('[data-copy-id]') || e.target.closest('button')) {
+          return;
+        }
+        openInspectorModal(item);
+      });
+
+      container.appendChild(tr);
     });
 
-    // Wire copy buttons
+    if (container !== tbody) {
+      tbody.appendChild(container);
+    }
+
+    // Wire copy buttons in table rows
     tbody.querySelectorAll('[data-copy-id]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -567,14 +646,35 @@
     });
   }
 
-  function updateMetrics(audit) {
-    document.getElementById('valTotal').textContent = audit.total_conversations || 0;
-    document.getElementById('valBound').textContent = audit.bound_to_projects || 0;
-    document.getElementById('valOutside').textContent = audit.outside_of_project || 0;
-    document.getElementById('valMissing').textContent = audit.missing_annotations || 0;
-    const unreg = Array.isArray(audit.unregistered_workspaces) ? audit.unregistered_workspaces.length : 0;
-    document.getElementById('valUnregistered').textContent = unreg;
+  function updateBadges(report) {
+    if (!report) return;
+    const total = report.total_conversations != null
+      ? report.total_conversations
+      : (Array.isArray(report.conversations) ? report.conversations.length : 0);
+    const bound = report.bound_to_projects != null ? report.bound_to_projects : 0;
+    const outside = report.outside_of_project != null ? report.outside_of_project : 0;
+    const missing = report.missing_annotations != null ? report.missing_annotations : 0;
+    const unreg = Array.isArray(report.unregistered_workspaces)
+      ? report.unregistered_workspaces.length
+      : (typeof report.unregistered_workspaces === 'number' ? report.unregistered_workspaces : 0);
+
+    const elTotal = document.getElementById('valTotal');
+    if (elTotal) elTotal.textContent = String(total);
+
+    const elBound = document.getElementById('valBound');
+    if (elBound) elBound.textContent = String(bound);
+
+    const elOutside = document.getElementById('valOutside');
+    if (elOutside) elOutside.textContent = String(outside);
+
+    const elMissing = document.getElementById('valMissing');
+    if (elMissing) elMissing.textContent = String(missing);
+
+    const elUnreg = document.getElementById('valUnregistered');
+    if (elUnreg) elUnreg.textContent = String(unreg);
   }
+
+  const updateMetrics = updateBadges;
 
   function updateFooterCount() {
     const el = document.getElementById('footerCountText');
@@ -586,10 +686,12 @@
   function setBusy(busy) {
     state.isBusy = busy;
     const loader = document.getElementById('tableLoader');
-    if (busy) {
-      loader.classList.remove('hidden');
-    } else {
-      loader.classList.add('hidden');
+    if (loader) {
+      if (busy) {
+        loader.classList.remove('hidden');
+      } else {
+        loader.classList.add('hidden');
+      }
     }
 
     const buttons = ['btnScan', 'btnDryRun', 'btnFix', 'btnBackups'];
@@ -624,7 +726,13 @@
     setTimeout(() => {
       toast.style.opacity = '0';
       toast.style.transform = 'translateY(10px)';
-      setTimeout(() => toast.remove(), 250);
+      setTimeout(() => {
+        if (typeof toast.remove === 'function') {
+          toast.remove();
+        } else if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 250);
     }, duration);
   }
 
@@ -650,22 +758,44 @@
 
   function switchView(viewName) {
     state.currentView = viewName;
+
+    // Hide all view panes
     document.querySelectorAll('.view-pane').forEach((pane) => {
       pane.classList.add('hidden');
     });
+
+    // Unhide and animate target view pane
     const target = document.getElementById('view-' + viewName);
     if (target) {
       target.classList.remove('hidden');
+      if (typeof target.animate === 'function') {
+        target.animate(
+          [
+            { opacity: 0, transform: 'translateY(6px)' },
+            { opacity: 1, transform: 'translateY(0)' }
+          ],
+          {
+            duration: 180,
+            easing: 'cubic-bezier(0.2, 0, 0, 1)',
+            fill: 'both'
+          }
+        );
+      }
     }
 
+    // Update active state in sidebar navigation items
     document.querySelectorAll('.sidebar-nav-item').forEach((item) => {
       const v = item.getAttribute('data-view');
       const f = item.getAttribute('data-filter');
       if (v === viewName) {
-        if (!f || f === state.filter) {
-          item.classList.add('active');
+        if (viewName === 'chats') {
+          if (!f || f === state.filter) {
+            item.classList.add('active');
+          } else {
+            item.classList.remove('active');
+          }
         } else {
-          item.classList.remove('active');
+          item.classList.add('active');
         }
       } else {
         item.classList.remove('active');
@@ -674,10 +804,223 @@
 
     if (viewName === 'backups') {
       loadBackupsList();
+    } else if (viewName === 'chats') {
+      applyFilterAndSearch();
     }
   }
 
-  // --- 9. Core User Actions ---
+  // --- 9. Dialog Inspector Modal ---
+  function ensureInspectorModal() {
+    let modal = document.getElementById('dialogInspectorModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'dialogInspectorModal';
+    modal.className = 'modal-overlay hidden';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'inspectorModalTitle');
+
+    modal.innerHTML = `
+      <div class="modal-card" style="max-width: 560px;">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <svg class="modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <h2 id="inspectorModalTitle" class="modal-title">${escapeHtml(t('inspectorTitle'))}</h2>
+          </div>
+          <button id="btnCloseInspectorModal" class="btn-close-modal" type="button" aria-label="Закрыть">✕</button>
+        </div>
+        <div class="modal-body" id="inspectorModalBody" style="gap: 12px; max-height: 480px; overflow-y: auto;">
+        </div>
+        <div class="modal-footer" style="gap: 10px; justify-content: flex-end; display: flex;">
+          <button id="btnInspectorCopyId" class="btn btn-secondary" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; margin-right: 6px;">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <span id="btnInspectorCopyIdText">${escapeHtml(t('inspectorBtnCopyId'))}</span>
+          </button>
+          <button id="btnInspectorFix" class="btn btn-primary" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; margin-right: 6px;">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+            <span id="btnInspectorFixText">${escapeHtml(t('inspectorBtnFix'))}</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const btnClose = modal.querySelector('#btnCloseInspectorModal');
+    if (btnClose) {
+      btnClose.addEventListener('click', closeInspectorModal);
+    }
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeInspectorModal();
+      }
+    });
+
+    const btnCopy = modal.querySelector('#btnInspectorCopyId');
+    if (btnCopy) {
+      btnCopy.addEventListener('click', () => {
+        if (!state.selectedConversation || !state.selectedConversation.id) return;
+        navigator.clipboard.writeText(state.selectedConversation.id).then(() => {
+          showToast(t('copiedId'), 'info');
+        }).catch(() => {});
+      });
+    }
+
+    const btnFix = modal.querySelector('#btnInspectorFix');
+    if (btnFix) {
+      btnFix.addEventListener('click', () => {
+        if (!state.selectedConversation) return;
+        handleTargetedFix(state.selectedConversation);
+      });
+    }
+
+    return modal;
+  }
+
+  function openInspectorModal(item) {
+    if (!item) return;
+    state.selectedConversation = item;
+    const modal = ensureInspectorModal();
+
+    const titleEl = modal.querySelector('#inspectorModalTitle');
+    if (titleEl) titleEl.textContent = t('inspectorTitle');
+
+    const copyTextEl = modal.querySelector('#btnInspectorCopyIdText');
+    if (copyTextEl) copyTextEl.textContent = t('inspectorBtnCopyId');
+
+    const fixTextEl = modal.querySelector('#btnInspectorFixText');
+    if (fixTextEl) fixTextEl.textContent = t('inspectorBtnFix');
+
+    const bodyEl = modal.querySelector('#inspectorModalBody');
+    if (bodyEl) {
+      const displayPath = cleanWorkspaceDisplay(item.workspace_uri);
+      const hasAnnotation = item.status !== 'missing_annotation';
+
+      let statusClass = 'status-ok';
+      let statusLabel = t('statusOk');
+      if (item.status === 'outside_of_project') {
+        statusClass = 'status-outside';
+        statusLabel = t('statusOutside');
+      } else if (item.status === 'missing_annotation') {
+        statusClass = 'status-missing';
+        statusLabel = t('statusMissing');
+      } else if (item.status === 'unregistered_workspace') {
+        statusClass = 'status-unregistered';
+        statusLabel = t('statusUnregistered');
+      }
+
+      const annClass = hasAnnotation ? 'status-ok' : 'status-missing';
+      const annLabel = hasAnnotation ? t('inspectorAnnotationPresent') : t('inspectorAnnotationMissing');
+
+      bodyEl.innerHTML = `
+        <div class="setting-card">
+          <span class="setting-title">${escapeHtml(t('inspectorTitleLabel'))}</span>
+          <span class="setting-value" style="font-family: var(--font-sans); font-weight: 600; font-size: 13.5px; color: var(--text-primary);">
+            ${escapeHtml(item.title || t('untitled'))}
+          </span>
+        </div>
+
+        <div class="setting-card">
+          <span class="setting-title">${escapeHtml(t('inspectorId'))}</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <code class="setting-value" style="color: var(--accent-cyan); word-break: break-all;">${escapeHtml(item.id || '—')}</code>
+          </div>
+        </div>
+
+        <div class="setting-card">
+          <span class="setting-title">${escapeHtml(t('inspectorWorkspace'))}</span>
+          <span class="setting-value" style="color: var(--text-secondary); word-break: break-all;" title="${escapeHtml(item.workspace_uri || '')}">
+            ${escapeHtml(displayPath)}
+          </span>
+        </div>
+
+        <div class="setting-card">
+          <span class="setting-title">${escapeHtml(t('inspectorProject'))}</span>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span class="setting-value" style="color: var(--text-primary);">${escapeHtml(item.project_name || '—')}</span>
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">(${escapeHtml(item.project_id || 'outside-of-project')})</span>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="setting-card">
+            <span class="setting-title">${escapeHtml(t('inspectorAnnotation'))}</span>
+            <div style="margin-top: 4px;">
+              <span class="status-pill ${annClass}">
+                <span class="dot"></span>
+                ${escapeHtml(annLabel)}
+              </span>
+            </div>
+          </div>
+
+          <div class="setting-card">
+            <span class="setting-title">${escapeHtml(t('inspectorStatus'))}</span>
+            <div style="margin-top: 4px;">
+              <span class="status-pill ${statusClass}">
+                <span class="dot"></span>
+                ${escapeHtml(statusLabel)}
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeInspectorModal() {
+    const modal = document.getElementById('dialogInspectorModal');
+    if (modal) modal.classList.add('hidden');
+    state.selectedConversation = null;
+  }
+
+  async function handleTargetedFix(item) {
+    if (state.isBusy) return;
+
+    await checkProcessStatus();
+    if (state.isRunning) {
+      const confirmed = window.confirm(t('fixWarnActive'));
+      if (!confirmed) return;
+    }
+
+    setBusy(true);
+    showToast(t('fixStarted'), 'warning');
+    appendSyncLog(`${t('fixStarted')} (${item.id})`, 'warning');
+
+    try {
+      const bridge = getBridge();
+      const res = await bridge.run_fix(false, true);
+
+      if (res.success) {
+        showToast(t('inspectorFixSuccess'), 'success', 5000);
+        appendSyncLog(`${t('inspectorFixSuccess')}: ${item.id}`, 'success');
+        closeInspectorModal();
+        await handleScan();
+      } else {
+        const errDesc = (res.errors && res.errors.length) ? res.errors.join(', ') : (res.error || t('inspectorFixFailed'));
+        showToast(errDesc, 'error', 6000);
+        appendSyncLog(errDesc, 'error');
+      }
+    } catch (err) {
+      console.error('Targeted fix error:', err);
+      showToast(String(err), 'error');
+      appendSyncLog(String(err), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // --- 10. Core User Actions ---
   async function handleScan() {
     if (state.isBusy) return;
     setBusy(true);
@@ -688,12 +1031,15 @@
       const bridge = getBridge();
       const audit = await bridge.run_audit();
       state.conversations = Array.isArray(audit.conversations) ? audit.conversations : [];
-      updateMetrics(audit);
+      updateBadges(audit);
       applyFilterAndSearch();
       const msg = t('scanComplete', { count: state.conversations.length });
       showToast(msg, 'success');
       appendSyncLog(msg, 'success');
-      document.getElementById('footerStatusText').textContent = t('readyStatus');
+      const footerStatus = document.getElementById('footerStatusText');
+      if (footerStatus) {
+        footerStatus.textContent = t('readyStatus');
+      }
     } catch (err) {
       console.error('Scan error:', err);
       showToast(String(err), 'error');
@@ -766,22 +1112,23 @@
     }
   }
 
-  // --- 9. Modal Backups & Rollback ---
+  // --- 11. Modal Backups & Rollback ---
   async function openBackupsModal() {
     const modal = document.getElementById('backupModal');
-    modal.classList.remove('hidden');
+    if (modal) modal.classList.remove('hidden');
     await checkProcessStatus();
     await loadBackupsList();
   }
 
   function closeBackupsModal() {
     const modal = document.getElementById('backupModal');
-    modal.classList.add('hidden');
+    if (modal) modal.classList.add('hidden');
   }
 
   async function loadBackupsList() {
     const listEl = document.getElementById('backupList');
     const emptyEl = document.getElementById('emptyBackups');
+    if (!listEl) return;
     listEl.innerHTML = '';
 
     try {
@@ -790,11 +1137,11 @@
       state.backups = Array.isArray(snapshots) ? snapshots : [];
 
       if (!state.backups.length) {
-        emptyEl.classList.remove('hidden');
+        if (emptyEl) emptyEl.classList.remove('hidden');
         return;
       }
 
-      emptyEl.classList.add('hidden');
+      if (emptyEl) emptyEl.classList.add('hidden');
 
       state.backups.forEach((snap) => {
         const item = document.createElement('div');
@@ -827,7 +1174,7 @@
       });
     } catch (err) {
       console.error('Failed to list backups:', err);
-      emptyEl.classList.remove('hidden');
+      if (emptyEl) emptyEl.classList.remove('hidden');
     }
   }
 
@@ -861,7 +1208,7 @@
     }
   }
 
-  // --- 10. Initialization & Event Wiring ---
+  // --- 12. Initialization & Event Wiring ---
   let isInitialized = false;
   let listenersWired = false;
 
@@ -869,7 +1216,10 @@
     if (listenersWired) return;
     listenersWired = true;
 
-    // 2. Wire Buttons & Controls
+    // Ensure Inspector Modal DOM exists
+    ensureInspectorModal();
+
+    // Language toggle
     const langBtn = document.getElementById('langToggle');
     if (langBtn) {
       langBtn.addEventListener('click', (e) => {
@@ -880,6 +1230,7 @@
       });
     }
 
+    // Buttons
     const btnScan = document.getElementById('btnScan');
     if (btnScan) btnScan.addEventListener('click', handleScan);
 
@@ -902,17 +1253,27 @@
     const btnModalCloseSecondary = document.getElementById('btnModalCloseSecondary');
     if (btnModalCloseSecondary) btnModalCloseSecondary.addEventListener('click', closeBackupsModal);
 
-    // Sidebar view switching
+    // Sidebar subcategories filtering under "Диалоги"
     document.querySelectorAll('.sidebar-nav-item[data-filter]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.sidebar-nav-item').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.filter = btn.getAttribute('data-filter') || 'all';
+        const filter = btn.getAttribute('data-filter') || 'all';
+        state.filter = filter;
         switchView('chats');
+
+        // Synchronize segmented controls in toolbar
+        document.querySelectorAll('.segment-btn').forEach((b) => {
+          if (b.getAttribute('data-filter') === filter) {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+
         applyFilterAndSearch();
       });
     });
 
+    // Sidebar navigation screens ("Инструменты": view-sync, view-backups, view-settings)
     document.querySelectorAll('.sidebar-nav-item[data-view]:not([data-filter])').forEach((btn) => {
       btn.addEventListener('click', () => {
         const view = btn.getAttribute('data-view');
@@ -953,7 +1314,7 @@
       });
     }
 
-    // Search input
+    // Search input real-time handler
     const searchInput = document.getElementById('searchInput');
     const btnClearSearch = document.getElementById('btnClearSearch');
 
@@ -977,12 +1338,14 @@
       });
     }
 
-    // Segmented tabs
+    // Segmented tabs in toolbar
     document.querySelectorAll('.segment-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
+        const filter = btn.getAttribute('data-filter') || 'all';
+        state.filter = filter;
+
         document.querySelectorAll('.segment-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
-        state.filter = btn.getAttribute('data-filter') || 'all';
 
         // Synchronize with sidebar nav item active state
         document.querySelectorAll('.sidebar-nav-item[data-filter]').forEach((nav) => {
@@ -995,6 +1358,14 @@
 
         applyFilterAndSearch();
       });
+    });
+
+    // Global keyboard shortcuts (Escape to close modals)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeInspectorModal();
+        closeBackupsModal();
+      }
     });
   }
 

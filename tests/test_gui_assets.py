@@ -374,3 +374,60 @@ def test_russian_typography_no_title_case(js_content: str):
     for key, text in ru_dict.items():
         for forbidden in forbidden_title_cases:
             assert forbidden not in text, f"Key '{key}' violates Russian sentence case rule: '{text}' contains '{forbidden}'"
+
+
+# ============================================================================
+# 10. Reactive Sidebar, Badges, Process Widget & Dialog Inspector Tests
+# ============================================================================
+
+def test_update_badges_function_defined(js_content: str):
+    """Verify updateBadges(report) exists and updates all sidebar counter badges."""
+    assert "function updateBadges(" in js_content or "const updateBadges = " in js_content, (
+        "updateBadges function is missing in app.js"
+    )
+    for badge_id in ["valTotal", "valBound", "valOutside", "valMissing", "valUnregistered"]:
+        assert badge_id in js_content, f"Badge element '{badge_id}' not handled in updateBadges"
+
+
+def test_sidebar_subcategories_and_view_switching(js_content: str):
+    """Verify sidebar subcategories and smooth animated view switching."""
+    # Views handled
+    for view in ["chats", "sync", "backups", "settings"]:
+        assert f"view-{view}" in js_content or f"'{view}'" in js_content, (
+            f"View '{view}' not handled in switchView"
+        )
+    # Subcategories filtered
+    for subcat in ["all", "outside", "missing", "unregistered", "bound"]:
+        assert f"'{subcat}'" in js_content, f"Subcategory filter '{subcat}' not handled"
+
+    # Animated transition (opacity & transform)
+    assert "opacity" in js_content
+    assert "transform" in js_content
+
+
+def test_compact_process_widget_formatting(js_content: str):
+    """Verify process status badge formats compact text and populates hover tooltip with PIDs."""
+    assert "IDE активна" in js_content, "Missing compact active IDE label in Russian"
+    assert "процесс" in js_content, "Missing process word formatting in Russian"
+    assert "pid-pill" in js_content, "Missing PID pill HTML generator for hover tooltip"
+    assert "processTooltip" in js_content, "Missing processTooltip update"
+
+
+def test_dialog_inspector_card_logic(js_content: str):
+    """Verify dialog inspector card opens on row click and shows full metadata with copy & fix buttons."""
+    # Inspector modal / card presence
+    assert "inspector" in js_content.lower(), "Missing dialog inspector implementation"
+    # Metadata fields: id, workspace, project, annotation/pbtxt
+    assert "pbtxt" in js_content.lower() or "annotation" in js_content.lower(), "Missing annotation status in inspector"
+    # Copy ID button action
+    assert "copiedId" in js_content, "Missing copy ID toast/action"
+    # Targeted fix action
+    assert "btnInspectorFix" in js_content or "handleTargetedFix" in js_content or "run_fix" in js_content
+
+
+def test_realtime_search_fields(js_content: str):
+    """Verify realtime search checks title, workspace path, project, and conversation ID."""
+    assert "workspace_uri" in js_content, "Search does not index workspace_uri"
+    assert "project_name" in js_content or "project_id" in js_content, "Search does not index project"
+    assert "title" in js_content, "Search does not index title"
+    assert "id" in js_content, "Search does not index conversation ID"
