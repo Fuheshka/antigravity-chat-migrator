@@ -391,3 +391,270 @@ def test_gui_api_real_filesystem_audit_and_fix(mock_path_manager: PathManager):
     assert restore_res["success"] is True
     assert restore_res["snapshot_id"] == snap_id
 
+
+def test_run_audit_corrupted_databases(mock_path_manager: PathManager):
+    """Test run_audit gracefully handles 0-byte, invalid binary, and schema-corrupted databases."""
+    import sqlite3
+
+    conv_dir = mock_path_manager.conversations_dir
+
+    # 1. 0-byte database file
+    (conv_dir / "zero_byte.db").touch()
+
+    # 2. Corrupted file with random binary garbage
+    (conv_dir / "corrupted_binary.db").write_bytes(b"\x00\xff\xfe\xca\xfe\xba\xbeNOT_SQLITE_HEADER")
+
+    # 3. Valid SQLite database with completely different / missing tables
+    wrong_db = conv_dir / "wrong_schema.db"
+    with sqlite3.connect(str(wrong_db)) as conn:
+        conn.execute("CREATE TABLE dummy (key TEXT, val TEXT)")
+        conn.execute("INSERT INTO dummy VALUES ('foo', 'bar')")
+
+    # 4. Corrupted conversation_summaries.db
+    mock_path_manager.summaries_db.write_bytes(b"CORRUPTED_SUMMARIES_BLOB")
+
+    mock_watcher = MagicMock()
+    mock_watcher.is_running.return_value = False
+    mock_watcher.get_pids.return_value = []
+
+    api = GuiBridgeApi(path_manager=mock_path_manager, process_watcher=mock_watcher)
+    audit = api.run_audit()
+
+    assert isinstance(audit, dict)
+    assert audit["total_conversations"] == 3
+    assert len(audit["conversations"]) == 3
+
+    # All corrupted files should be safely mapped to outside_of_project with fallback titles
+    for conv in audit["conversations"]:
+        assert conv["status"] == "outside_of_project"
+        assert conv["title"] == "Untitled Conversation"
+        assert conv["project_id"] is None
+        assert conv["workspace_uri"] is None
+
+    # Verify JSON serialization succeeds without errors
+    serialized = json.dumps(audit)
+    assert len(serialized) > 0
+
+
+def test_run_audit_inaccessible_and_missing_directories(mock_path_manager: PathManager):
+    """Test run_audit and helpers when directories are missing or raise OS errors."""
+    import shutil
+
+    # 1. projects_dir missing
+    shutil.rmtree(mock_path_manager.projects_dir)
+    api = GuiBridgeApi(path_manager=mock_path_manager)
+    assert api._load_project_names() == {}
+
+    # 2. projects_dir with invalid JSON
+    mock_path_manager.projects_dir.mkdir(parents=True, exist_ok=True)
+    (mock_path_manager.projects_dir / "bad.json").write_text("{malformed: json", encoding="utf-8")
+    (mock_path_manager.projects_dir / "valid.json").write_text(
+        json.dumps({"id": "p1", "name": "Valid Project"}), encoding="utf-8"
+    )
+    names = api._load_project_names()
+    assert names == {"p1": "Valid Project"}
+
+    # 3. conversations_dir missing
+    shutil.rmtree(mock_path_manager.conversations_dir)
+    assert api._extract_conversations_details() == []
+
+    # 4. Exception raised during audit
+    with patch.object(api.service, "audit", side_effect=PermissionError("Permission denied")):
+        result = api.run_audit()
+        assert isinstance(result, dict)
+        assert result["total_conversations"] == 0
+        assert "error" in result
+        assert json.dumps(result)
+
+
+def test_run_fix_dry_run_vs_live_filesystem_verification(mock_path_manager: PathManager):
+    """Verify that dry_run=True leaves disk completely untouched while dry_run=False persists changes."""
+    import sqlite3
+    from antigravity_migrator.proto_codec import build_workspace_info, encode_field
+
+    ws_uri = "file:///Users/fuheshka/workspace/my-feature-repo"
+    c_db = mock_path_manager.conversations_dir / "conv_test.db"
+
+    # Create unbound database
+    parts = [
+        encode_field(1, 2, build_workspace_info(ws_uri)),
+        encode_field(7, 2, ws_uri.encode("utf-8")),
+    ]
+    with sqlite3.connect(str(c_db)) as conn:
+        conn.execute("CREATE TABLE trajectory_metadata_blob (id TEXT PRIMARY KEY, data BLOB)")
+        conn.execute("INSERT INTO trajectory_metadata_blob VALUES ('main', ?)", (b"".join(parts),))
+
+    initial_bytes = c_db.read_bytes()
+
+    mock_watcher = MagicMock()
+    mock_watcher.is_running.return_value = False
+    mock_watcher.get_pids.return_value = []
+
+    api = GuiBridgeApi(path_manager=mock_path_manager, process_watcher=mock_watcher)
+
+    # 1. Simulation (Dry-Run)
+    sim_res = api.run_fix(dry_run=True, auto_register=True)
+    assert sim_res["success"] is True
+    assert sim_res["dry_run"] is True
+    assert sim_res["conversations_scanned"] == 1
+    assert sim_res["conversations_updated"] == 1
+    assert sim_res["backup_path"] is None or not Path(sim_res["backup_path"]).exists()
+
+    # Verify database file remains 100% untouched
+    assert c_db.read_bytes() == initial_bytes
+    # Verify no snapshots created on disk
+    assert len(list(mock_path_manager.backups_dir.glob("*"))) == 0
+    # Verify no annotation file created
+    assert not (mock_path_manager.annotations_dir / "conv_test.pbtxt").exists()
+
+    # 2. Live Run (dry_run=False)
+    live_res = api.run_fix(dry_run=False, auto_register=True)
+    assert live_res["success"] is True
+    assert live_res["dry_run"] is False
+    assert live_res["conversations_updated"] == 1
+    assert live_res["backup_path"] is not None
+    assert Path(live_res["backup_path"]).exists()
+
+    # Verify database file has changed
+    assert c_db.read_bytes() != initial_bytes
+
+    # Verify snapshot exists
+    backups = api.list_backups()
+    assert len(backups) == 1
+    assert backups[0]["files_count"] > 0
+
+    # Verify annotation was written
+    ann_file = mock_path_manager.annotations_dir / "conv_test.pbtxt"
+    assert ann_file.exists()
+
+
+def test_list_backups_various_formats(mock_path_manager: PathManager):
+    """Verify list_backups handles ISO strings, float timestamps, and date folder formats."""
+    mock_bm = MagicMock()
+    mock_bm.list_snapshots.return_value = [
+        # Standard folder format
+        {
+            "id": "2026-09-30_12-30-45",
+            "path": mock_path_manager.backups_dir / "2026-09-30_12-30-45",
+            "created_at": None,
+            "files_count": 10,
+            "size_bytes": 2048,
+        },
+        # ISO string format
+        {
+            "id": "custom_snap_iso",
+            "path": mock_path_manager.backups_dir / "custom_snap_iso",
+            "created_at": "2026-09-30T14:15:00",
+            "files_count": 5,
+            "size_bytes": 1024,
+        },
+        # Numeric timestamp
+        {
+            "id": "custom_snap_num",
+            "path": mock_path_manager.backups_dir / "custom_snap_num",
+            "created_at": 1790757000.0,
+            "files_count": 8,
+            "size_bytes": 4096,
+        },
+        # Unparseable fallback
+        {
+            "id": "custom_unparseable",
+            "path": mock_path_manager.backups_dir / "custom_unparseable",
+            "created_at": "not-a-date",
+            "files_count": 1,
+            "size_bytes": 512,
+        },
+    ]
+
+    api = GuiBridgeApi(path_manager=mock_path_manager, backup_manager=mock_bm)
+    backups = api.list_backups()
+
+    assert len(backups) == 4
+    assert backups[0]["id"] == "2026-09-30_12-30-45"
+    assert "2026-09-30 12:30:45" in backups[0]["date_formatted"]
+    assert backups[1]["id"] == "custom_snap_iso"
+    assert "2026-09-30 14:15:00" in backups[1]["date_formatted"]
+    assert backups[2]["id"] == "custom_snap_num"
+    assert backups[2]["timestamp"] == 1790757000.0
+    assert backups[3]["id"] == "custom_unparseable"
+    assert backups[3]["date_formatted"] == "not-a-date"
+
+    assert json.dumps(backups)
+
+
+def test_restore_backup_nonexistent_and_absolute_path(mock_path_manager: PathManager):
+    """Verify restore_backup with non-existent snapshot and with absolute path."""
+    mock_watcher = MagicMock()
+    mock_watcher.is_running.return_value = False
+
+    mock_bm = MagicMock()
+    mock_bm.backup_dir = mock_path_manager.backups_dir
+    mock_bm.restore_snapshot.return_value = False
+
+    api = GuiBridgeApi(
+        path_manager=mock_path_manager,
+        process_watcher=mock_watcher,
+        backup_manager=mock_bm,
+    )
+
+    # Failed restore
+    res_fail = api.restore_backup("nonexistent_id")
+    assert res_fail["success"] is False
+    assert "Failed to restore" in res_fail["error"]
+
+    # Absolute path restore
+    abs_snap = mock_path_manager.backups_dir / "2026-09-30_99-99-99"
+    abs_snap.mkdir(parents=True, exist_ok=True)
+    mock_bm.restore_snapshot.return_value = True
+
+    res_abs = api.restore_backup(str(abs_snap))
+    assert res_abs["success"] is True
+    assert res_abs["snapshot_id"] == str(abs_snap)
+
+
+def test_api_strict_json_contract(mock_path_manager: PathManager):
+    """Validate that every GuiBridgeApi response contains strictly JSON-serializable types and expected keys."""
+    mock_watcher = MagicMock()
+    mock_watcher.is_running.return_value = False
+    mock_watcher.get_pids.return_value = []
+
+    api = GuiBridgeApi(path_manager=mock_path_manager, process_watcher=mock_watcher)
+
+    # 1. get_system_info
+    sys_info = api.get_system_info()
+    encoded = json.dumps(sys_info)
+    decoded = json.loads(encoded)
+    assert isinstance(decoded["paths"], dict)
+    assert all(isinstance(k, str) and isinstance(v, str) for k, v in decoded["paths"].items())
+
+    # 2. get_process_status
+    proc_status = api.get_process_status()
+    decoded = json.loads(json.dumps(proc_status))
+    assert decoded["is_running"] is False
+    assert isinstance(decoded["pids"], list)
+
+    # 3. run_audit
+    audit = api.run_audit()
+    decoded = json.loads(json.dumps(audit))
+    assert isinstance(decoded["unregistered_workspaces"], list)
+    assert isinstance(decoded["conversations"], list)
+    assert isinstance(decoded["total_conversations"], int)
+
+    # 4. run_fix
+    fix = api.run_fix(dry_run=True)
+    decoded = json.loads(json.dumps(fix))
+    assert isinstance(decoded["success"], bool)
+    assert isinstance(decoded["errors"], list)
+
+    # 5. list_backups
+    backups = api.list_backups()
+    decoded = json.loads(json.dumps(backups))
+    assert isinstance(decoded, list)
+
+    # 6. restore_backup
+    restore = api.restore_backup("dummy_id")
+    decoded = json.loads(json.dumps(restore))
+    assert isinstance(decoded["success"], bool)
+    assert "snapshot_id" in decoded
+
+
