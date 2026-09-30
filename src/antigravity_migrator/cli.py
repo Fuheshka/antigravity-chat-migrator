@@ -137,8 +137,14 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.callback()
+# Filter out macOS LaunchServices Process Serial Number argument (-psn_...) if present
+if any(arg.startswith("-psn_") for arg in sys.argv):
+    sys.argv = [arg for arg in sys.argv if not arg.startswith("-psn_")]
+
+
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     version: Optional[bool] = typer.Option(
         None,
         "--version",
@@ -146,6 +152,21 @@ def main(
         help="Show application version and exit.",
         callback=version_callback,
         is_eager=True,
+    ),
+    cli: bool = typer.Option(
+        False,
+        "--cli",
+        help="Force CLI/terminal mode instead of launching GUI.",
+    ),
+    tui: bool = typer.Option(
+        False,
+        "--tui",
+        help="Force CLI/terminal mode instead of launching GUI.",
+    ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Enable developer tools and debug mode for GUI.",
     ),
     lang: Optional[str] = typer.Option(
         None,
@@ -173,6 +194,20 @@ def main(
         _STATE["data_dir"] = str(data_dir)
     if config_dir:
         _STATE["config_dir"] = str(config_dir)
+
+    # If no subcommand was invoked (e.g. agy-migrator called directly)
+    if ctx.invoked_subcommand is None:
+        if cli or tui:
+            # Force terminal mode: show banner and help
+            active_lang = _STATE.get("lang") or get_current_locale()
+            render_banner(console=console, lang=active_lang)
+            console.print(ctx.get_help())
+            return
+
+        # Default mode without arguments: launch desktop GUI
+        from antigravity_migrator.gui import launch_gui
+
+        launch_gui(debug=debug)
 
 
 @app.command("audit")

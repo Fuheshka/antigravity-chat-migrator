@@ -151,7 +151,7 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<EOF
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>launcher</string>
+    <string>agy-migrator</string>
     <key>CFBundleIdentifier</key>
     <string>com.fuheshka.antigravity-chat-migrator</string>
     <key>CFBundleName</key>
@@ -173,21 +173,6 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<EOF
 </dict>
 </plist>
 EOF
-
-# Create GUI launcher script (opens Terminal for interactive audit or executes command)
-cat > "${APP_BUNDLE}/Contents/MacOS/launcher" <<'EOF'
-#!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-BIN="$DIR/agy-migrator"
-
-if [ -t 0 ]; then
-    exec "$BIN" "$@"
-else
-    # Launched from Finder GUI - open Terminal with interactive audit
-    osascript -e "tell application \"Terminal\" to do script \"\\\"$BIN\\\" audit; echo ''; echo 'Run \\\"agy-migrator --help\\\" for full command list.'; echo 'Press Enter to exit...'; read\" activate"
-fi
-EOF
-chmod +x "${APP_BUNDLE}/Contents/MacOS/launcher"
 
 # Clean extended attributes and sign app bundle
 xattr -cr "${APP_BUNDLE}"

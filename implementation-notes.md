@@ -579,5 +579,81 @@
 - Полная автономность: 0 внешних ссылок и CDN зависимостей.
 - Тестовый набор проекта: 125 тестов, 100% pass (1.80s).
 
+## 2026-09-30: Промпт 2.3 — Оконный модуль на базе pywebview и маршрутизация точек входа (gui.py, cli.py, __main__.py)
 
+### Принятые архитектурные решения
+1. **Оконный модуль WebKit / WebView2 (`launch_gui` в `src/antigravity_migrator/gui.py`):**
+   - Интеграция `pywebview>=5.0.0` для создания нативного системного окна WebKit (macOS) и WebView2 (Windows).
+   - Параметры окна: заголовок `"Antigravity Chat Migrator"`, стартовые размеры `1024x720`, минимальный размер `min_size=(800, 560)`, разрешен ресайз (`resizable=True`), поддержка выделения текста (`text_select=True`).
+   - Нативная темная тема окна: фоновый цвет `background_color="#0d1117"` согласуется с палитрой `style.css`, исключая белые вспышки при инициализации.
+   - Центрирование на экране: передача `x=None, y=None` активирует нативное оптическое центрирование (Cocoa `[NSWindow center]` на macOS и `CenterToScreen()` на Windows).
+   - Привязка API: нативная передача `js_api=GuiBridgeApi()` (или переданного экземпляра) с доступом из JavaScript через `window.pywebview.api`.
+   - Надежное разрешение путей фронтенда (`get_gui_asset_dir`, `get_gui_index_path`): поддержка как исходного дерева пакета (`src/antigravity_migrator/gui/`), так и frozen-бандлов PyInstaller (`sys._MEIPASS`).
+   - Параметр `start_loop: bool = True`: возможность создания окна без блокировки для автоматизированного тестирования.
+
+2. **Маршрутизация точки входа Typer CLI (`src/antigravity_migrator/cli.py`):**
+   - Главный callback `@app.callback(invoke_without_command=True)`:
+     - При вызове без подкоманд (`agy-migrator` без аргументов или дабл-клик по приложению в Finder / Проводнике) автоматически запускает `launch_gui(debug=debug)`.
+     - Флаги `--cli` и `--tui` принудительно оставляют консольный режим (отображают баннер и справочную информацию Typer, не открывая окно).
+     - Флаг `--debug` пробрасывает включение Developer Tools / Web Inspector в WebView.
+     - Все подкоманды (`audit`, `fix`, `watch`, `rollback`) сохраняют привычный терминальный Rich-режим и не активируют GUI.
+   - Фильтрация аргументов LaunchServices macOS: очистка `sys.argv` от сервисного префикса `-psn_...` при запуске из Finder.
+
+3. **Обновление точки входа пакета (`src/antigravity_migrator/__main__.py`):**
+   - Прямой вызов `python -m antigravity_migrator` по умолчанию открывает десктопный GUI, сохраняя полную поддержку всех CLI аргументов и флагов.
+
+4. **Обновление зависимостей проекта (`pyproject.toml`):**
+   - Добавлена зависимость `"pywebview>=5.0.0"` в базовый список `dependencies`.
+
+### Результаты тестирования
+- `tests/test_gui.py`: 12 тестов, 100% pass (0.05s).
+- Проверены:
+  - Разрешение путей ассетов: дефолтные пути, эмуляция PyInstaller `_MEIPASS`, обработка `FileNotFoundError`.
+  - Инициализация окна: проверка всех параметров `webview.create_window` (заголовок, геометрия, фон, центрирование, привязка API, URL к `index.html`).
+  - Пользовательские параметры: кастомные размеры, заголовок, `debug=True`, пользовательский мост API.
+  - Обработка отсутствия `pywebview`: выброс `RuntimeError` с понятным сообщением.
+  - Маршрутизация CLI:
+    - Запуск без аргументов -> вызов `launch_gui()`.
+    - Запуск с `--debug` -> вызов `launch_gui(debug=True)`.
+    - Запуск с `--cli` -> терминальный режим без открытия GUI.
+    - Запуск с `--tui` -> терминальный режим без открытия GUI.
+    - Вызов подкоманды `audit` -> выполнение консольного аудита без вызова `launch_gui()`.
+- Общий тестовый набор проекта: 137 тестов, 100% pass (1.83s).
+
+## 2026-09-30: Промпт 2.4 — Конфигурации PyInstaller, GUI-ассеты, оконный режим Windows и нативный macOS App/DMG
+
+### Принятые архитектурные решения
+1. **Включение GUI фронтенд-ассетов в спецификации PyInstaller:**
+   - В `packaging/macos/migrator.spec` и `packaging/windows/migrator.spec` добавлен маппинг `datas=[(str(BASE_DIR / "src" / "antigravity_migrator" / "gui"), "antigravity_migrator/gui")]`.
+   - При распаковке в `sys._MEIPASS` фронтенд-ресурсы (`index.html`, `style.css`, `app.js`) доступны оконному модулю `gui.py`.
+2. **Скрытые импорты (hiddenimports) для pywebview и GUI-модулей:**
+   - В macOS спецификацию включены: `"webview"`, `"webview.platforms.cocoa"`, `"antigravity_migrator.gui"`, `"antigravity_migrator.gui_api"`.
+   - В Windows спецификацию включены: `"webview"`, `"webview.platforms.winforms"`, `"webview.platforms.edgechromium"`, `"antigravity_migrator.gui"`, `"antigravity_migrator.gui_api"`.
+3. **Бесконсольный оконный режим для Windows (`--noconsole`):**
+   - В `packaging/windows/migrator.spec` задано `console=False` в `EXE(...)`.
+   - В `packaging/windows/build_windows.ps1` и `build_windows.bat` добавлен параметр `--noconsole` и обновлены информационные логи.
+   - Дабл-клик по `agy-migrator.exe` открывает нативное GUI окно без появления черного окна командной строки.
+   - Консольные сценарии (`audit`, `fix`, `watch`, `rollback`) по-прежнему запускаются через `run_fix.bat` или из командной строки.
+4. **Полноценный нативный GUI App Bundle для macOS:**
+   - В `packaging/macos/build_macos.sh` удален промежуточный скрипт `launcher`, вызывавший AppleScript `tell application "Terminal"`.
+   - `CFBundleExecutable` напрямую указывает на бинарник `agy-migrator`.
+   - В `Info.plist` гарантированы параметры `CFBundlePackageType = APPL` и `NSHighResolutionCapable = True`.
+   - В `packaging/macos/entrypoint.py` добавлена фильтрация аргумента LaunchServices (`-psn_...`).
+   - При клике по `.app` в Finder приложение открывает нативное WebKit-окно без вызова терминала.
+5. **Сборка и дистрибуция:**
+   - Пересобран нативный бандл `dist/macos/Antigravity Chat Migrator.app` и подписан ad-hoc сертификатом.
+   - Пересобран Apple HIG-совместимый DMG-образ `dist/macos/Antigravity-Chat-Migrator-macOS.dmg` с фиксированными границами окна Finder (660x440), фоном Retina TIFF и скрытыми служебными файлами (`y=500`).
+   - Собран портативный архив `dist/Antigravity-Chat-Migrator-Windows-x64.zip`.
+6. **Автоматизированное тестирование упаковки:**
+   - Создан тестовый модуль `tests/test_packaging_macos.py` (валидация файлов, AST-анализ spec-файла, валидация структуры `Info.plist` через `plistlib`, проверка отсутствия лаунчера Terminal).
+   - Обновлен `tests/test_packaging_windows.py` с проверкой `console=False`, GUI-данных и webview.
+
+### Результаты тестирования
+- `tests/test_packaging_macos.py`: 5 тестов, 100% pass (0.01s).
+- `tests/test_packaging_windows.py`: 6 тестов, 100% pass (0.12s).
+- Проверена валидность `Info.plist` через `plutil -lint`.
+- Проверена подпись бандла через `codesign -vvv --deep --strict`.
+- Проверен запуск GUI из бандла (процесс успешно стартовал и оставался активным в цикле событий).
+- Проверено монтирование DMG-образа `hdiutil attach`, атрибуты скрытых файлов (`GetFileInfo`) и корректное размонтирование.
+- Общий тестовый набор проекта: 142 теста, 100% pass (1.80s).
 

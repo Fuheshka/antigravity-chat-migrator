@@ -82,9 +82,9 @@ if ($NeedsGen) {
 }
 
 # 5. Run PyInstaller
-Write-Host "--> Compiling standalone binary with PyInstaller..." -ForegroundColor Yellow
+Write-Host "--> Compiling standalone windowed binary (--noconsole) with PyInstaller..." -ForegroundColor Yellow
 $SpecPath = Join-Path $RepoRoot "packaging\windows\migrator.spec"
-& $PythonBin -m PyInstaller --distpath $DistWin --workpath $BuildWin --noconfirm $SpecPath
+& $PythonBin -m PyInstaller --distpath $DistWin --workpath $BuildWin --noconfirm --noconsole $SpecPath
 
 $ExePath = Join-Path $DistWin "agy-migrator.exe"
 if (-not (Test-Path $ExePath)) {

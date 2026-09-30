@@ -86,8 +86,8 @@ if not exist "%ICO_PATH%" (
 )
 
 rem 5. Run PyInstaller
-echo Compiling standalone binary with PyInstaller...
-%PYTHON_BIN% -m PyInstaller --distpath "%DIST_WIN%" --workpath "%BUILD_WIN%" --noconfirm "%REPO_ROOT%\packaging\windows\migrator.spec"
+echo Compiling standalone windowed binary (--noconsole) with PyInstaller...
+%PYTHON_BIN% -m PyInstaller --distpath "%DIST_WIN%" --workpath "%BUILD_WIN%" --noconfirm --noconsole "%REPO_ROOT%\packaging\windows\migrator.spec"
 if not "%ERRORLEVEL%"=="0" (
     echo [ERROR] PyInstaller compilation failed.
     popd
@@ -105,8 +105,8 @@ echo [OK] Executable compiled at %EXE_PATH%
 rem 6. Package into Portable ZIP Archive
 if not "%NOZIP%"=="1" (
     echo Assembling portable ZIP package...
-    set "STAGING=%DIST_WIN%\staging"
-    if exist "!STAGING!" rmdir /s /q "!STAGING!"
+    set "STAGING=%DIST_WIN%\staging\Antigravity-Chat-Migrator"
+    if exist "%DIST_WIN%\staging" rmdir /s /q "%DIST_WIN%\staging"
     mkdir "!STAGING!"
 
     copy /y "%EXE_PATH%" "!STAGING!\agy-migrator.exe" >nul
@@ -118,17 +118,17 @@ if not "%NOZIP%"=="1" (
 
     where powershell >nul 2>nul
     if "!ERRORLEVEL!"=="0" (
-        powershell -NoProfile -Command "Compress-Archive -Path '!STAGING!\*' -DestinationPath '!ZIP_PATH!' -Force"
+        powershell -NoProfile -Command "Compress-Archive -Path '%DIST_WIN%\staging\*' -DestinationPath '!ZIP_PATH!' -Force"
     ) else (
         where tar >nul 2>nul
         if "!ERRORLEVEL!"=="0" (
-            tar -a -c -f "!ZIP_PATH!" -C "!STAGING!" *
+            tar -a -c -f "!ZIP_PATH!" -C "%DIST_WIN%\staging" Antigravity-Chat-Migrator
         ) else (
             echo [WARNING] Neither PowerShell nor tar found. Could not create ZIP archive automatically.
         )
     )
 
-    if exist "!STAGING!" rmdir /s /q "!STAGING!"
+    if exist "%DIST_WIN%\staging" rmdir /s /q "%DIST_WIN%\staging"
 
     if exist "!ZIP_PATH!" (
         echo ============================================================

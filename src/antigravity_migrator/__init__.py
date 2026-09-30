@@ -62,11 +62,19 @@ from antigravity_migrator.ui_renderer import (
     render_warning_cold_disk,
 )
 from antigravity_migrator.gui_api import GuiBridgeApi
+from antigravity_migrator.gui import (
+    get_gui_asset_dir,
+    get_gui_index_path,
+    launch_gui,
+)
 from antigravity_migrator.cli import app
 
 __all__ = [
     "app",
     "GuiBridgeApi",
+    "launch_gui",
+    "get_gui_asset_dir",
+    "get_gui_index_path",
     "PathManager",
     "DatabaseManager",
     "extract_workspace_uri",

@@ -50,9 +50,11 @@ class TestPackagingWindows(unittest.TestCase):
 
         # Check critical settings
         self.assertIn("agy-migrator", content)
-        self.assertIn("console=True", content)
+        self.assertIn("console=False", content)
         self.assertIn("AppIcon.ico", content)
         self.assertIn("antigravity_migrator", content)
+        self.assertIn("antigravity_migrator/gui", content)
+        self.assertIn("webview", content)
 
     def test_generate_ico_functionality(self):
         """Verify generate_ico creates valid multi-resolution ICO file."""
