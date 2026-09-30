@@ -1,5 +1,7 @@
 """Antigravity Chat Migrator & Project Sync Utility."""
 
+__version__ = "0.1.0"
+
 from antigravity_migrator.paths import PathManager
 from antigravity_migrator.proto_codec import (
     build_workspace_info,
@@ -59,12 +61,12 @@ from antigravity_migrator.ui_renderer import (
     render_sync_progress,
     render_warning_cold_disk,
 )
+from antigravity_migrator.gui_api import GuiBridgeApi
 from antigravity_migrator.cli import app
-
-__version__ = "0.1.0"
 
 __all__ = [
     "app",
+    "GuiBridgeApi",
     "PathManager",
     "DatabaseManager",
     "extract_workspace_uri",
