@@ -378,21 +378,61 @@
       const count = state.pids.length || 1;
       const pidsStr = state.pids.length ? state.pids.join(', ') : 'active';
       badgeText.textContent = state.lang === 'ru'
-        ? `● IDE активна (${count})`
-        : `● IDE active (${count})`;
+        ? `IDE активна (${count})`
+        : `IDE active (${count})`;
+
       if (tooltip) {
-        tooltip.textContent = `PID: ${pidsStr}`;
+        const pidsHtml = state.pids.length
+          ? state.pids.map((p) => `<span class="pid-pill">${escapeHtml(String(p))}</span>`).join('')
+          : `<span class="pid-pill">${escapeHtml(pidsStr)}</span>`;
+
+        if (state.lang === 'ru') {
+          tooltip.innerHTML = `
+            <div class="tooltip-header">
+              <span class="tooltip-title">Процессы Antigravity (${count})</span>
+              <span class="tooltip-tag warning">Горячий диск</span>
+            </div>
+            <div class="tooltip-desc">Для безопасной записи остановите приложение IDE.</div>
+            <div class="tooltip-pids-label">Активные PID:</div>
+            <div class="tooltip-pids">${pidsHtml}</div>
+          `;
+        } else {
+          tooltip.innerHTML = `
+            <div class="tooltip-header">
+              <span class="tooltip-title">Antigravity Processes (${count})</span>
+              <span class="tooltip-tag warning">Hot Disk</span>
+            </div>
+            <div class="tooltip-desc">Please quit the Antigravity application for safe offline writes.</div>
+            <div class="tooltip-pids-label">Active PIDs:</div>
+            <div class="tooltip-pids">${pidsHtml}</div>
+          `;
+        }
       }
       if (modalWarn) modalWarn.classList.remove('hidden');
     } else {
       badge.className = 'badge-status badge-idle';
       badgeText.textContent = state.lang === 'ru'
-        ? '● Холодный диск'
-        : '● Cold disk';
+        ? 'Холодный диск'
+        : 'Cold disk';
+
       if (tooltip) {
-        tooltip.textContent = state.lang === 'ru'
-          ? 'IDE остановлена. Диск холодный, запись безопасна.'
-          : 'IDE stopped. Cold disk, safe to write.';
+        if (state.lang === 'ru') {
+          tooltip.innerHTML = `
+            <div class="tooltip-header">
+              <span class="tooltip-title">Antigravity остановлена</span>
+              <span class="tooltip-tag success">Безопасно</span>
+            </div>
+            <div class="tooltip-desc">Диск холодный. Базы данных SQLite готовы к безопасной синхронизации.</div>
+          `;
+        } else {
+          tooltip.innerHTML = `
+            <div class="tooltip-header">
+              <span class="tooltip-title">Antigravity Stopped</span>
+              <span class="tooltip-tag success">Safe</span>
+            </div>
+            <div class="tooltip-desc">Cold disk state. SQLite databases are safe for migration.</div>
+          `;
+        }
       }
       if (modalWarn) modalWarn.classList.add('hidden');
     }
@@ -822,60 +862,45 @@
   }
 
   // --- 10. Initialization & Event Wiring ---
-  async function init() {
-    // 1. Language detection
-    let initialLang = 'ru';
-    try {
-      const savedLang = localStorage.getItem('antigravity_migrator_lang');
-      if (savedLang === 'ru' || savedLang === 'en') {
-        initialLang = savedLang;
-      } else if (navigator.language && !navigator.language.startsWith('ru')) {
-        initialLang = 'en';
-      }
-    } catch (_) {}
+  let isInitialized = false;
+  let listenersWired = false;
 
-    // Check system info from bridge if available
-    try {
-      const bridge = getBridge();
-      const info = await bridge.get_system_info();
-      state.systemInfo = info;
-      if (info && info.app_version) {
-        const verEl = document.getElementById('appVersion');
-        if (verEl) verEl.textContent = 'v' + info.app_version;
-      }
-      if (info) {
-        const settingDataDir = document.getElementById('settingDataDir');
-        if (settingDataDir && info.paths && info.paths.data_dir) {
-          settingDataDir.textContent = info.paths.data_dir;
-        }
-        const settingBackupsDir = document.getElementById('settingBackupsDir');
-        if (settingBackupsDir && info.paths && info.paths.backups_dir) {
-          settingBackupsDir.textContent = info.paths.backups_dir;
-        }
-        const settingPlatform = document.getElementById('settingPlatform');
-        if (settingPlatform) {
-          settingPlatform.textContent = `${info.platform || 'macOS'} (${info.os || 'Darwin'}) • App v${info.app_version || '0.1.0'}`;
-        }
-      }
-    } catch (_) {}
-
-    setLanguage(initialLang);
+  function wireEvents() {
+    if (listenersWired) return;
+    listenersWired = true;
 
     // 2. Wire Buttons & Controls
-    document.getElementById('langToggle').addEventListener('click', () => {
-      const nextLang = state.lang === 'ru' ? 'en' : 'ru';
-      setLanguage(nextLang);
-    });
+    const langBtn = document.getElementById('langToggle');
+    if (langBtn) {
+      langBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const nextLang = state.lang === 'ru' ? 'en' : 'ru';
+        setLanguage(nextLang);
+      });
+    }
 
-    document.getElementById('btnScan').addEventListener('click', handleScan);
-    document.getElementById('btnDryRun').addEventListener('click', handleDryRun);
-    document.getElementById('btnFix').addEventListener('click', handleFix);
-    document.getElementById('btnBackups').addEventListener('click', () => {
-      switchView('backups');
-    });
+    const btnScan = document.getElementById('btnScan');
+    if (btnScan) btnScan.addEventListener('click', handleScan);
 
-    document.getElementById('btnCloseModal').addEventListener('click', closeBackupsModal);
-    document.getElementById('btnModalCloseSecondary').addEventListener('click', closeBackupsModal);
+    const btnDryRun = document.getElementById('btnDryRun');
+    if (btnDryRun) btnDryRun.addEventListener('click', handleDryRun);
+
+    const btnFix = document.getElementById('btnFix');
+    if (btnFix) btnFix.addEventListener('click', handleFix);
+
+    const btnBackups = document.getElementById('btnBackups');
+    if (btnBackups) {
+      btnBackups.addEventListener('click', () => {
+        switchView('backups');
+      });
+    }
+
+    const btnCloseModal = document.getElementById('btnCloseModal');
+    if (btnCloseModal) btnCloseModal.addEventListener('click', closeBackupsModal);
+
+    const btnModalCloseSecondary = document.getElementById('btnModalCloseSecondary');
+    if (btnModalCloseSecondary) btnModalCloseSecondary.addEventListener('click', closeBackupsModal);
 
     // Sidebar view switching
     document.querySelectorAll('.sidebar-nav-item[data-filter]').forEach((btn) => {
@@ -932,23 +957,25 @@
     const searchInput = document.getElementById('searchInput');
     const btnClearSearch = document.getElementById('btnClearSearch');
 
-    searchInput.addEventListener('input', (e) => {
-      state.searchQuery = e.target.value;
-      if (state.searchQuery) {
-        btnClearSearch.classList.remove('hidden');
-      } else {
-        btnClearSearch.classList.add('hidden');
-      }
-      applyFilterAndSearch();
-    });
+    if (searchInput && btnClearSearch) {
+      searchInput.addEventListener('input', (e) => {
+        state.searchQuery = e.target.value;
+        if (state.searchQuery) {
+          btnClearSearch.classList.remove('hidden');
+        } else {
+          btnClearSearch.classList.add('hidden');
+        }
+        applyFilterAndSearch();
+      });
 
-    btnClearSearch.addEventListener('click', () => {
-      searchInput.value = '';
-      state.searchQuery = '';
-      btnClearSearch.classList.add('hidden');
-      applyFilterAndSearch();
-      searchInput.focus();
-    });
+      btnClearSearch.addEventListener('click', () => {
+        searchInput.value = '';
+        state.searchQuery = '';
+        btnClearSearch.classList.add('hidden');
+        applyFilterAndSearch();
+        searchInput.focus();
+      });
+    }
 
     // Segmented tabs
     document.querySelectorAll('.segment-btn').forEach((btn) => {
@@ -956,9 +983,86 @@
         document.querySelectorAll('.segment-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         state.filter = btn.getAttribute('data-filter') || 'all';
+
+        // Synchronize with sidebar nav item active state
+        document.querySelectorAll('.sidebar-nav-item[data-filter]').forEach((nav) => {
+          if (nav.getAttribute('data-filter') === state.filter) {
+            nav.classList.add('active');
+          } else {
+            nav.classList.remove('active');
+          }
+        });
+
         applyFilterAndSearch();
       });
     });
+  }
+
+  function formatPlatformText(info) {
+    if (!info) return 'macOS • App v0.1.0';
+    const plat = info.platform || '';
+    const os = info.os || 'macOS';
+    const ver = info.app_version || '0.1.0';
+
+    if (plat.includes('macOS')) {
+      const m = plat.match(/macOS-([0-9.]+)-([a-zA-Z0-9]+)/);
+      if (m) {
+        return `macOS ${m[1]} (${m[2]}) • App v${ver}`;
+      }
+    } else if (plat.includes('Windows')) {
+      const m = plat.match(/Windows-([0-9.]+)/);
+      if (m) {
+        return `Windows ${m[1]} • App v${ver}`;
+      }
+    }
+    return `${plat || os} • App v${ver}`;
+  }
+
+  function applySystemInfo(info) {
+    if (!info) return;
+    state.systemInfo = info;
+    if (info.app_version) {
+      const verEl = document.getElementById('appVersion');
+      if (verEl) verEl.textContent = 'v' + info.app_version;
+    }
+    const settingDataDir = document.getElementById('settingDataDir');
+    if (settingDataDir && info.paths && info.paths.data_dir) {
+      settingDataDir.textContent = info.paths.data_dir;
+    }
+    const settingBackupsDir = document.getElementById('settingBackupsDir');
+    if (settingBackupsDir && info.paths && info.paths.backups_dir) {
+      settingBackupsDir.textContent = info.paths.backups_dir;
+    }
+    const settingPlatform = document.getElementById('settingPlatform');
+    if (settingPlatform) {
+      settingPlatform.textContent = formatPlatformText(info);
+    }
+  }
+
+  async function init() {
+    if (isInitialized) return;
+    isInitialized = true;
+
+    // 1. Language detection
+    let initialLang = 'ru';
+    try {
+      const savedLang = localStorage.getItem('antigravity_migrator_lang');
+      if (savedLang === 'ru' || savedLang === 'en') {
+        initialLang = savedLang;
+      } else if (navigator.language && !navigator.language.startsWith('ru')) {
+        initialLang = 'en';
+      }
+    } catch (_) {}
+
+    // Check system info from bridge if available
+    try {
+      const bridge = getBridge();
+      const info = await bridge.get_system_info();
+      applySystemInfo(info);
+    } catch (_) {}
+
+    setLanguage(initialLang);
+    wireEvents();
 
     // 3. Initial check & scan
     await checkProcessStatus();
@@ -970,9 +1074,21 @@
   if (window.pywebview) {
     document.addEventListener('DOMContentLoaded', init);
   } else {
-    window.addEventListener('pywebviewready', () => {
-      if (!state.systemInfo) init();
+    window.addEventListener('pywebviewready', async () => {
+      if (!isInitialized) {
+        await init();
+      } else {
+        // Refresh with real pywebview bridge
+        try {
+          const bridge = getBridge();
+          const info = await bridge.get_system_info();
+          applySystemInfo(info);
+        } catch (_) {}
+        checkProcessStatus();
+        handleScan();
+      }
     });
+
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         setTimeout(init, 30);
