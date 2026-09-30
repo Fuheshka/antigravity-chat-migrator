@@ -68,6 +68,38 @@
       dialogsCount: '{count} диалогов',
       filesCount: '{count} файлов',
       untitled: 'Без названия',
+      navSectionChats: 'Диалоги',
+      navAllChats: 'Все диалоги',
+      navOutsideChats: 'Вне проектов',
+      navMissingChats: 'Без названий',
+      navUnregisteredChats: 'Вне реестра',
+      navBoundChats: 'Привязаны к проектам',
+      navSectionTools: 'Инструменты',
+      navSync: 'Синхронизация',
+      navBackups: 'Резервные копии',
+      navSettings: 'Настройки',
+      btnExport: 'Экспорт',
+      syncTitle: 'Синхронизация и миграция',
+      syncDesc: 'Исправление привязок воркспейсов, восстановление заголовков и синхронизация реестра проектов',
+      syncSafetyTitle: 'Инвариант холодного диска',
+      syncSafetyText: 'Перед записью обязательно останавливать процессы IDE для предотвращения повреждения SQLite WAL файлов',
+      syncSimTitle: 'Симуляция (Dry-Run)',
+      syncSimDesc: 'Безопасный анализ без изменений на диске. Проверяет привязки, находит расхождения и генерирует отчет',
+      syncFixTitle: 'Боевое исправление (Fix)',
+      syncFixDesc: 'Автоматическое создание APFS CoW бэкапа, атомарное обновление SQLite и генерация .pbtxt аннотаций',
+      syncLogTitle: 'Лог выполнения',
+      btnClearLog: 'Очистить',
+      backupsTitle: 'Резервные копии APFS CoW',
+      backupsDesc: 'Мгновенные снимки файловой системы APFS с возможностью отката в один клик',
+      btnRefreshBackups: 'Обновить список',
+      settingsTitle: 'Настройки и система',
+      settingsDesc: 'Конфигурация расположения баз данных, хранилища бэкапов и системные параметры',
+      lblDataDir: 'Каталог данных Antigravity',
+      lblBackupsDir: 'Каталог резервных копий',
+      lblPlatform: 'Платформа и система',
+      lblAuthor: 'Автор и разработка',
+      authorText: 'Даниил К. (Fuheshka)',
+      exportSuccess: 'Список диалогов экспортирован',
     },
     en: {
       appTitle: 'Antigravity Chat Migrator',
@@ -128,6 +160,38 @@
       dialogsCount: '{count} conversations',
       filesCount: '{count} files',
       untitled: 'Untitled',
+      navSectionChats: 'Chats',
+      navAllChats: 'All chats',
+      navOutsideChats: 'Outside of project',
+      navMissingChats: 'Missing titles',
+      navUnregisteredChats: 'Unregistered',
+      navBoundChats: 'Bound to projects',
+      navSectionTools: 'Tools',
+      navSync: 'Synchronization',
+      navBackups: 'Backups & rollback',
+      navSettings: 'Settings',
+      btnExport: 'Export',
+      syncTitle: 'Synchronization & migration',
+      syncDesc: 'Fix workspace bindings, restore chat titles, and synchronize project registry',
+      syncSafetyTitle: 'Cold disk invariant',
+      syncSafetyText: 'Always stop IDE processes before writing to avoid corrupting SQLite WAL files',
+      syncSimTitle: 'Simulation (Dry-Run)',
+      syncSimDesc: 'Safe read-only analysis without touching disk. Checks bindings, finds discrepancies, and generates report',
+      syncFixTitle: 'Production fix (Cold disk)',
+      syncFixDesc: 'Automatic APFS CoW snapshot creation, atomic SQLite updates, and .pbtxt annotation generation',
+      syncLogTitle: 'Execution log',
+      btnClearLog: 'Clear',
+      backupsTitle: 'APFS CoW backups',
+      backupsDesc: 'Instant zero-cost APFS filesystem snapshots with one-click instant rollback',
+      btnRefreshBackups: 'Refresh list',
+      settingsTitle: 'Settings & system',
+      settingsDesc: 'Configuration of database locations, backup storage, and system parameters',
+      lblDataDir: 'Antigravity data directory',
+      lblBackupsDir: 'Backups directory',
+      lblPlatform: 'Platform & system',
+      lblAuthor: 'Author & credits',
+      authorText: 'Daniil K. (Fuheshka)',
+      exportSuccess: 'Conversations exported successfully',
     }
   };
 
@@ -304,16 +368,32 @@
   function updateProcessBadgeUI() {
     const badge = document.getElementById('processBadge');
     const badgeText = document.getElementById('processBadgeText');
+    const tooltip = document.getElementById('processTooltip');
     const modalWarn = document.getElementById('modalColdDiskWarn');
+
+    if (!badge || !badgeText) return;
 
     if (state.isRunning) {
       badge.className = 'badge-status badge-running';
+      const count = state.pids.length || 1;
       const pidsStr = state.pids.length ? state.pids.join(', ') : 'active';
-      badgeText.textContent = t('processRunning', { pids: pidsStr });
+      badgeText.textContent = state.lang === 'ru'
+        ? `● IDE активна (${count})`
+        : `● IDE active (${count})`;
+      if (tooltip) {
+        tooltip.textContent = `PID: ${pidsStr}`;
+      }
       if (modalWarn) modalWarn.classList.remove('hidden');
     } else {
       badge.className = 'badge-status badge-idle';
-      badgeText.textContent = t('processIdle');
+      badgeText.textContent = state.lang === 'ru'
+        ? '● Холодный диск'
+        : '● Cold disk';
+      if (tooltip) {
+        tooltip.textContent = state.lang === 'ru'
+          ? 'IDE остановлена. Диск холодный, запись безопасна.'
+          : 'IDE stopped. Cold disk, safe to write.';
+      }
       if (modalWarn) modalWarn.classList.add('hidden');
     }
   }
@@ -348,6 +428,8 @@
       list = list.filter((c) => c.status === 'missing_annotation');
     } else if (state.filter === 'unregistered') {
       list = list.filter((c) => c.status === 'unregistered_workspace');
+    } else if (state.filter === 'bound') {
+      list = list.filter((c) => c.status === 'ok');
     }
 
     // Search query matching
@@ -516,11 +598,51 @@
       .replace(/'/g, '&#039;');
   }
 
-  // --- 8. Core User Actions ---
+  // --- 8. Split View Navigation & Logs ---
+  function appendSyncLog(msg, type = 'info') {
+    const logEl = document.getElementById('syncLogOutput');
+    if (!logEl) return;
+    const time = new Date().toLocaleTimeString();
+    const prefix = type === 'error' ? '❌ ' : type === 'success' ? '✅ ' : 'ℹ️ ';
+    logEl.textContent += `[${time}] ${prefix}${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function switchView(viewName) {
+    state.currentView = viewName;
+    document.querySelectorAll('.view-pane').forEach((pane) => {
+      pane.classList.add('hidden');
+    });
+    const target = document.getElementById('view-' + viewName);
+    if (target) {
+      target.classList.remove('hidden');
+    }
+
+    document.querySelectorAll('.sidebar-nav-item').forEach((item) => {
+      const v = item.getAttribute('data-view');
+      const f = item.getAttribute('data-filter');
+      if (v === viewName) {
+        if (!f || f === state.filter) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      } else {
+        item.classList.remove('active');
+      }
+    });
+
+    if (viewName === 'backups') {
+      loadBackupsList();
+    }
+  }
+
+  // --- 9. Core User Actions ---
   async function handleScan() {
     if (state.isBusy) return;
     setBusy(true);
     showToast(t('scanStarted'), 'info');
+    appendSyncLog(t('scanStarted'), 'info');
 
     try {
       const bridge = getBridge();
@@ -528,11 +650,14 @@
       state.conversations = Array.isArray(audit.conversations) ? audit.conversations : [];
       updateMetrics(audit);
       applyFilterAndSearch();
-      showToast(t('scanComplete', { count: state.conversations.length }), 'success');
+      const msg = t('scanComplete', { count: state.conversations.length });
+      showToast(msg, 'success');
+      appendSyncLog(msg, 'success');
       document.getElementById('footerStatusText').textContent = t('readyStatus');
     } catch (err) {
       console.error('Scan error:', err);
       showToast(String(err), 'error');
+      appendSyncLog(String(err), 'error');
     } finally {
       setBusy(false);
     }
@@ -542,16 +667,20 @@
     if (state.isBusy) return;
     setBusy(true);
     showToast(t('dryRunStarted'), 'info');
+    appendSyncLog(t('dryRunStarted'), 'info');
 
     try {
       const bridge = getBridge();
       const res = await bridge.run_fix(true, true);
       const updated = res.conversations_updated || 0;
       const annotations = res.annotations_created || 0;
-      showToast(t('dryRunComplete', { updated, annotations }), 'info', 5000);
+      const msg = t('dryRunComplete', { updated, annotations });
+      showToast(msg, 'info', 5000);
+      appendSyncLog(msg, 'success');
     } catch (err) {
       console.error('Dry-run error:', err);
       showToast(String(err), 'error');
+      appendSyncLog(String(err), 'error');
     } finally {
       setBusy(false);
     }
@@ -569,6 +698,7 @@
 
     setBusy(true);
     showToast(t('fixStarted'), 'warning');
+    appendSyncLog(t('fixStarted'), 'warning');
 
     try {
       const bridge = getBridge();
@@ -577,16 +707,20 @@
       if (res.success) {
         const updated = res.conversations_updated || 0;
         const annotations = res.annotations_created || 0;
-        showToast(t('fixComplete', { updated, annotations }), 'success', 5000);
+        const msg = t('fixComplete', { updated, annotations });
+        showToast(msg, 'success', 5000);
+        appendSyncLog(msg, 'success');
         // Refresh audit table
         await handleScan();
       } else {
         const errDesc = (res.errors && res.errors.length) ? res.errors.join(', ') : (res.error || 'Failed');
         showToast(errDesc, 'error', 6000);
+        appendSyncLog(errDesc, 'error');
       }
     } catch (err) {
       console.error('Fix error:', err);
       showToast(String(err), 'error');
+      appendSyncLog(String(err), 'error');
     } finally {
       setBusy(false);
     }
@@ -709,6 +843,20 @@
         const verEl = document.getElementById('appVersion');
         if (verEl) verEl.textContent = 'v' + info.app_version;
       }
+      if (info) {
+        const settingDataDir = document.getElementById('settingDataDir');
+        if (settingDataDir && info.paths && info.paths.data_dir) {
+          settingDataDir.textContent = info.paths.data_dir;
+        }
+        const settingBackupsDir = document.getElementById('settingBackupsDir');
+        if (settingBackupsDir && info.paths && info.paths.backups_dir) {
+          settingBackupsDir.textContent = info.paths.backups_dir;
+        }
+        const settingPlatform = document.getElementById('settingPlatform');
+        if (settingPlatform) {
+          settingPlatform.textContent = `${info.platform || 'macOS'} (${info.os || 'Darwin'}) • App v${info.app_version || '0.1.0'}`;
+        }
+      }
     } catch (_) {}
 
     setLanguage(initialLang);
@@ -722,10 +870,63 @@
     document.getElementById('btnScan').addEventListener('click', handleScan);
     document.getElementById('btnDryRun').addEventListener('click', handleDryRun);
     document.getElementById('btnFix').addEventListener('click', handleFix);
-    document.getElementById('btnBackups').addEventListener('click', openBackupsModal);
+    document.getElementById('btnBackups').addEventListener('click', () => {
+      switchView('backups');
+    });
 
     document.getElementById('btnCloseModal').addEventListener('click', closeBackupsModal);
     document.getElementById('btnModalCloseSecondary').addEventListener('click', closeBackupsModal);
+
+    // Sidebar view switching
+    document.querySelectorAll('.sidebar-nav-item[data-filter]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sidebar-nav-item').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.filter = btn.getAttribute('data-filter') || 'all';
+        switchView('chats');
+        applyFilterAndSearch();
+      });
+    });
+
+    document.querySelectorAll('.sidebar-nav-item[data-view]:not([data-filter])').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const view = btn.getAttribute('data-view');
+        switchView(view);
+      });
+    });
+
+    // Clear log button
+    const btnClearLog = document.getElementById('btnClearLog');
+    if (btnClearLog) {
+      btnClearLog.addEventListener('click', () => {
+        const logEl = document.getElementById('syncLogOutput');
+        if (logEl) logEl.textContent = '';
+      });
+    }
+
+    // Refresh backups button
+    const btnRefreshBackups = document.getElementById('btnRefreshBackups');
+    if (btnRefreshBackups) {
+      btnRefreshBackups.addEventListener('click', () => {
+        loadBackupsList();
+        showToast(t('btnRefreshBackups'), 'info');
+      });
+    }
+
+    // Export button
+    const btnExport = document.getElementById('btnExport');
+    if (btnExport) {
+      btnExport.addEventListener('click', () => {
+        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(state.filteredList, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute('href', dataStr);
+        downloadAnchor.setAttribute('download', `antigravity_conversations_${Date.now()}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        showToast(t('exportSuccess') || 'Экспорт завершен', 'success');
+      });
+    }
 
     // Search input
     const searchInput = document.getElementById('searchInput');
