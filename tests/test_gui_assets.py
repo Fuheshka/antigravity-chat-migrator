@@ -489,3 +489,39 @@ def test_update_checker_ui_elements(html_parsed: _HTMLValidator, js_content: str
     assert "check_for_updates" in js_content
     assert "open_update_url" in js_content
 
+
+# ============================================================================
+# 11. Platform Adaptation & Windows 11 Fluent Design Tests
+# ============================================================================
+
+def test_windows_fluent_css_tokens(css_content: str):
+    """Verify Windows 11 Fluent Design CSS tokens and styling in style.css."""
+    assert "body.platform-windows" in css_content or ".platform-windows" in css_content, (
+        "Missing .platform-windows selector in style.css"
+    )
+    # Typography: Segoe UI Variable Text and Cascadia Code
+    assert "Segoe UI Variable Text" in css_content, "Missing 'Segoe UI Variable Text' font in style.css"
+    assert "Cascadia Code" in css_content, "Missing 'Cascadia Code' font in style.css"
+
+    # Windows 11 Radii
+    assert "--radius-xl: 8px;" in css_content, "Missing Windows 11 --radius-xl (8px)"
+    assert "--radius-lg: 6px;" in css_content, "Missing Windows 11 --radius-lg (6px)"
+    assert "--radius-md: 4px;" in css_content, "Missing Windows 11 --radius-md (4px)"
+    assert "--radius-sm: 4px;" in css_content, "Missing Windows 11 --radius-sm (4px)"
+
+    # Focus border token for Windows Fluent
+    assert "--border-focus: #60cdff;" in css_content, "Missing Windows 11 --border-focus (#60cdff)"
+
+    # Fluent scrollbars: 8px width, 4px radius, hover rgba(255, 255, 255, 0.25)
+    assert "::-webkit-scrollbar" in css_content
+    assert "body.platform-windows ::-webkit-scrollbar" in css_content
+    assert "rgba(255, 255, 255, 0.25)" in css_content, "Missing Fluent scrollbar hover rgba(255, 255, 255, 0.25)"
+
+
+def test_platform_class_assignment_in_js(js_content: str):
+    """Verify app.js assigns platform-windows or platform-macos to document.body based on system info."""
+    assert "platform-windows" in js_content, "Missing 'platform-windows' class assignment in app.js"
+    assert "platform-macos" in js_content, "Missing 'platform-macos' class assignment in app.js"
+    assert "document.body.classList" in js_content, "Missing document.body.classList manipulation in app.js"
+
+

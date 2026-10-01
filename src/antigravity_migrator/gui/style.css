@@ -122,6 +122,56 @@ html, body {
 }
 
 /* ==========================================================================
+   1.1 Platform Adaptation — Windows 11 Fluent Design
+   Activated via platform-windows class on body when running on Windows (WebView2)
+   ========================================================================== */
+
+body.platform-windows {
+  /* Windows 11 Typography Stack */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", "SF Mono", monospace;
+
+  /* Windows 11 Geometry & Refined Radii */
+  --radius-xl: 8px;
+  --radius-lg: 6px;
+  --radius-md: 4px;
+  --radius-sm: 4px;
+
+  /* Windows 11 Fluent Focus Accent */
+  --border-focus: #60cdff;
+}
+
+/* Windows 11 Fluent Scrollbars */
+body.platform-windows ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+body.platform-windows ::-webkit-scrollbar-track {
+  background: transparent;
+}
+body.platform-windows ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+body.platform-windows ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+body.platform-windows * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+body.platform-windows .search-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px rgba(96, 205, 255, 0.25);
+}
+
+/* macOS Apple HIG Dark Glass baseline explicit alias */
+body.platform-macos {
+  /* Retains Apple HIG tokens defined in :root */
+}
+
+
+/* ==========================================================================
    2. App Layout Container (Flex Two-Panel System)
    ========================================================================== */
 

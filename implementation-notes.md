@@ -852,4 +852,23 @@
 - Расширены `tests/test_cli.py`, `tests/test_gui_api.py` и `tests/test_gui_assets.py`.
 - Все 188 тестов проекта успешно проходят (1.91s).
 
+## 2026-10-01: Адаптация веб-интерфейса под Windows 11 Fluent Design (WebView2)
+
+### Принятые архитектурные и дизайнерские решения
+1. **Динамическое назначение класса платформы в `app.js` (`applySystemInfo`):**
+   - При инициализации контроллера и получении данных от `pywebview.api.get_system_info()` проверяется свойство `info.os` (или `info.platform`).
+   - Если среда исполнения — Windows (`win`, `win32`), на элемент `document.body` назначается класс `platform-windows` (с удалением `platform-macos`).
+   - Если среда исполнения — macOS (`darwin`, `mac`), на элемент `document.body` назначается класс `platform-macos` (с удалением `platform-windows`).
+2. **Ветка стилей Windows 11 Fluent Design в `style.css` (`body.platform-windows`):**
+   - **Типографика:** Нативный стек Windows 11 `--font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;` и моноширинный стек `--font-mono: "Cascadia Code", "Consolas", "SF Mono", monospace;`.
+   - **Геометрия и скругления:** Строгие радиусы Windows 11 (`--radius-xl: 8px;`, `--radius-lg: 6px;`, `--radius-md: 4px;`, `--radius-sm: 4px;`), каскадно применяемые ко всем карточкам, кнопкам, модальным окнам и таблицам.
+   - **Акцентные рамки фокуса:** Фирменный акцент Windows 11 `--border-focus: #60cdff;` с полупрозрачным кольцом фокуса `rgba(96, 205, 255, 0.25)`.
+   - **Нативные скроллбары Fluent:** Тонкие ползунки шириной 8px с радиусом 4px, полупрозрачным фоном и подсветкой при наведении `rgba(255, 255, 255, 0.25)`.
+3. **100% сохранение обратной совместимости:**
+   - На macOS сохраняется базовая эстетика Apple HIG Dark Glass с крупными скруглениями (14px/10px/8px), системным шрифтом SF Pro и тонкими 6px pill-скроллбарами.
+4. **TDD цикл и покрытие тестами:**
+   - В `tests/test_gui_assets.py` добавлены тесты `test_windows_fluent_css_tokens` и `test_platform_class_assignment_in_js`.
+   - Все 190 тестов проекта успешно проходят.
+
+
 

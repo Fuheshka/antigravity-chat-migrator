@@ -1554,6 +1554,17 @@
   function applySystemInfo(info) {
     if (!info) return;
     state.systemInfo = info;
+
+    // Platform adaptation: Windows 11 Fluent vs macOS Apple HIG
+    const os = String(info.os || info.platform || '').toLowerCase();
+    if (os.includes('win') || os === 'win32') {
+      document.body.classList.remove('platform-macos');
+      document.body.classList.add('platform-windows');
+    } else if (os.includes('darwin') || os.includes('mac')) {
+      document.body.classList.remove('platform-windows');
+      document.body.classList.add('platform-macos');
+    }
+
     if (info.app_version) {
       const verEl = document.getElementById('appVersion');
       if (verEl) verEl.textContent = 'v' + info.app_version;
