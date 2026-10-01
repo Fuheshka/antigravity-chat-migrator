@@ -35,6 +35,7 @@ class TestPackagingWindows(unittest.TestCase):
             "run_fix.bat",
             "README_WINDOWS.txt",
             "entrypoint.py",
+            "gui_entrypoint.py",
             "generate_ico.py",
         ]
         for fname in required:
@@ -50,11 +51,71 @@ class TestPackagingWindows(unittest.TestCase):
 
         # Check critical settings
         self.assertIn("agy-migrator", content)
-        self.assertIn("console=False", content)
+        self.assertIn("Antigravity Chat Migrator", content)
+        self.assertIn("gui_entrypoint.py", content)
+        self.assertIn("entrypoint.py", content)
         self.assertIn("AppIcon.ico", content)
         self.assertIn("antigravity_migrator", content)
         self.assertIn("antigravity_migrator/gui", content)
         self.assertIn("webview", content)
+        self.assertIn("webview.platforms.winforms", content)
+        self.assertIn("webview.platforms.edgechromium", content)
+        self.assertIn("typer", content)
+        self.assertIn("rich", content)
+
+        # AST analysis: verify dual-binary targets share single Analysis and PYZ
+        analysis_calls = []
+        pyz_calls = []
+        exe_calls = {}
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and isinstance(node.value, ast.Call):
+                        func_name = getattr(node.value.func, "id", None)
+                        if func_name == "Analysis":
+                            analysis_calls.append(target.id)
+                        elif func_name == "PYZ":
+                            pyz_calls.append(target.id)
+                        elif func_name == "EXE":
+                            # Extract name and console arguments
+                            kwargs = {kw.arg: kw.value for kw in node.value.keywords}
+                            name_val = None
+                            if "name" in kwargs:
+                                if isinstance(kwargs["name"], ast.Constant):
+                                    name_val = kwargs["name"].value
+                            console_val = None
+                            if "console" in kwargs:
+                                if isinstance(kwargs["console"], ast.Constant):
+                                    console_val = kwargs["console"].value
+                            exe_calls[target.id] = {"name": name_val, "console": console_val}
+
+        # Single Analysis and PYZ shared across builds
+        self.assertEqual(len(analysis_calls), 1, "Expected exactly 1 shared Analysis target")
+        self.assertEqual(len(pyz_calls), 1, "Expected exactly 1 shared PYZ target")
+
+        # Two EXE targets: exe_gui and exe_cli
+        self.assertIn("exe_gui", exe_calls, "Missing exe_gui target in migrator.spec")
+        self.assertIn("exe_cli", exe_calls, "Missing exe_cli target in migrator.spec")
+
+        self.assertIn("Antigravity Chat Migrator", exe_calls["exe_gui"]["name"])
+        self.assertFalse(exe_calls["exe_gui"]["console"], "exe_gui must have console=False")
+
+        self.assertIn("agy-migrator", exe_calls["exe_cli"]["name"])
+        self.assertTrue(exe_calls["exe_cli"]["console"], "exe_cli must have console=True")
+
+    def test_entrypoints_contract(self):
+        """Verify gui_entrypoint.py calls launch_gui() and entrypoint.py calls app()."""
+        gui_ep = self.windows_pkg_dir / "gui_entrypoint.py"
+        cli_ep = self.windows_pkg_dir / "entrypoint.py"
+        self.assertTrue(gui_ep.is_file(), f"gui_entrypoint.py missing at {gui_ep}")
+        self.assertTrue(cli_ep.is_file(), f"entrypoint.py missing at {cli_ep}")
+
+        gui_content = gui_ep.read_text(encoding="utf-8")
+        self.assertIn("launch_gui", gui_content)
+
+        cli_content = cli_ep.read_text(encoding="utf-8")
+        self.assertIn("app", cli_content)
 
     def test_generate_ico_functionality(self):
         """Verify generate_ico creates valid multi-resolution ICO file."""
@@ -100,6 +161,12 @@ class TestPackagingWindows(unittest.TestCase):
                         counts["("] -= 1
             self.assertEqual(counts["("], 0, f"Unbalanced parentheses in {bat_name}")
 
+        # Check run_fix.bat CLI targets
+        run_fix_text = (self.windows_pkg_dir / "run_fix.bat").read_text(encoding="utf-8")
+        self.assertIn("agy-migrator.exe", run_fix_text)
+        self.assertIn("audit", run_fix_text)
+        self.assertIn("fix", run_fix_text)
+
     def test_powershell_script_syntax(self):
         """Verify PowerShell build script has balanced braces, brackets, and quotes."""
         ps1_path = self.windows_pkg_dir / "build_windows.ps1"
@@ -129,9 +196,11 @@ class TestPackagingWindows(unittest.TestCase):
             stage_dir = Path(td) / "staging" / "Antigravity-Chat-Migrator"
             stage_dir.mkdir(parents=True)
 
-            # Create mock binary
-            mock_exe = stage_dir / "agy-migrator.exe"
-            mock_exe.write_bytes(b"MZ\x90\x00" + b"\x00" * 1024)
+            # Create mock binaries (GUI and CLI)
+            mock_gui_exe = stage_dir / "Antigravity Chat Migrator.exe"
+            mock_gui_exe.write_bytes(b"MZ\x90\x00" + b"\x00" * 1024)
+            mock_cli_exe = stage_dir / "agy-migrator.exe"
+            mock_cli_exe.write_bytes(b"MZ\x90\x00" + b"\x00" * 1024)
 
             # Copy launcher and docs
             import shutil
@@ -151,6 +220,7 @@ class TestPackagingWindows(unittest.TestCase):
             # Verify contents of zip
             with zipfile.ZipFile(zip_dest, "r") as zf:
                 namelist = zf.namelist()
+                self.assertIn("Antigravity-Chat-Migrator/Antigravity Chat Migrator.exe", namelist)
                 self.assertIn("Antigravity-Chat-Migrator/agy-migrator.exe", namelist)
                 self.assertIn("Antigravity-Chat-Migrator/run_fix.bat", namelist)
                 self.assertIn("Antigravity-Chat-Migrator/README_WINDOWS.txt", namelist)

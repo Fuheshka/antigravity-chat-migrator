@@ -870,5 +870,27 @@
    - В `tests/test_gui_assets.py` добавлены тесты `test_windows_fluent_css_tokens` и `test_platform_class_assignment_in_js`.
    - Все 190 тестов проекта успешно проходят.
 
+## 2026-10-01: Промпт 8.2 - Архитектура Dual-Binary для Windows в PyInstaller
 
+### Принятые архитектурные и инженерные решения
+1. **Разделение энтрипоинтов (`packaging/windows/`):**
+   - Создан выделенный оконный энтрипоинт `gui_entrypoint.py`: выполняет прямой вызов `launch_gui()` без аргументов для запуска веб-интерфейса WebView2.
+   - Сохранен консольный энтрипоинт `entrypoint.py`: запускает Typer CLI-приложение `app()` для интерактивной работы в терминале, скриптах и bat-файлах.
+2. **Единый Analysis и PYZ архив в `migrator.spec`:**
+   - Оба энтрипоинта передаются в единый `Analysis([ENTRYPOINT_GUI, ENTRYPOINT_CLI], ...)` и собираются в один `PYZ` архив. Это радикально ускоряет сборку и устраняет дублирование анализа зависимостей.
+   - Фильтрация скриптов для каждого таргета:
+     - `scripts_gui = [s for s in a.scripts if s[0] != "entrypoint"]` сохраняет все runtime-хуки PyInstaller и назначает `gui_entrypoint` точкой входа лаунчера.
+     - `scripts_cli = [s for s in a.scripts if s[0] != "gui_entrypoint"]` сохраняет все runtime-хуки и назначает `entrypoint` точкой входа консольной утилиты.
+3. **Два таргета EXE в спецификации `migrator.spec`:**
+   - `exe_gui`: `name="Antigravity Chat Migrator.exe"`, `console=False`, иконка `AppIcon.ico` для бесшовного запуска GUI в один клик без мигания консольных окон.
+   - `exe_cli`: `name="agy-migrator.exe"`, `console=True`, иконка `AppIcon.ico` для полноценного CLI-интерфейса с Rich-таблицами и цветным выводом.
+   - Включены все GUI-ассеты (`antigravity_migrator/gui`) и скрытые импорты (`webview.platforms.winforms`, `webview.platforms.edgechromium`, `typer`, `rich`, `updater`).
+4. **Интеграция с пакетными скриптами и тестами:**
+   - В `packaging/windows/run_fix.bat` подтверждено обращение к консольному бинарнику `agy-migrator.exe` для выполнения команд `audit` и `fix`.
+   - В `tests/test_packaging_windows.py` добавлены проверки AST-дерева `migrator.spec` (наличие двух `EXE` таргетов `exe_gui` и `exe_cli`, проверка флагов `console=False` и `console=True`, единые `Analysis` и `PYZ`), проверка контракта обоих энтрипоинтов, валидация команд в `run_fix.bat` и симуляция распаковки обоих бинарников в ZIP-архив.
 
+### Результаты тестирования
+- Выполнен полный цикл TDD: подтвержден переход из состояния RED (3 failing tests) в состояние GREEN (7 passing tests).
+- Синтаксис спецификации проверен компилятором: `python -m py_compile packaging/windows/migrator.spec` завершился без ошибок.
+- Тестовый набор Windows упаковки: `tests/test_packaging_windows.py` (7 тестов, 100% pass).
+- Общий тестовый набор проекта: 191 тест, 100% pass (1.96s).
