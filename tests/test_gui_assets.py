@@ -466,3 +466,26 @@ def test_realtime_search_fields(js_content: str):
     assert "project_name" in js_content or "project_id" in js_content, "Search does not index project"
     assert "title" in js_content, "Search does not index title"
     assert "id" in js_content, "Search does not index conversation ID"
+
+
+def test_update_checker_ui_elements(html_parsed: _HTMLValidator, js_content: str, css_content: str):
+    """Verify presence of update checker UI badges, buttons, cards, and JS handlers."""
+    # 1. HTML elements
+    assert "headerUpdateBadge" in html_parsed.ids
+    assert "sidebarUpdateBadge" in html_parsed.ids
+    assert "cardUpdateChecker" in html_parsed.ids
+    assert "btnCheckUpdates" in html_parsed.ids
+    assert "btnDownloadUpdate" in html_parsed.ids
+    assert "updateStatusText" in html_parsed.ids
+
+    # 2. CSS styles
+    assert "badge-new-version" in css_content
+    assert "badge-new-nav" in css_content
+    assert "update-details-box" in css_content
+
+    # 3. JavaScript logic
+    assert "checkForUpdates" in js_content
+    assert "renderUpdateUI" in js_content
+    assert "check_for_updates" in js_content
+    assert "open_update_url" in js_content
+

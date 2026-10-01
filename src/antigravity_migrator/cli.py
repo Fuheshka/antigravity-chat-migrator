@@ -12,10 +12,12 @@ from typing import Optional
 
 from rich import box
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 import typer
 
 from antigravity_migrator.backup_manager import BackupManager
+from antigravity_migrator.updater import check_github_update, open_update_url
 from antigravity_migrator.i18n import (
     MESSAGES,
     get_current_locale,
@@ -66,6 +68,16 @@ MESSAGES["en"].update({
     "cli_rollback_col_date": "Created at",
     "cli_rollback_col_files": "Files",
     "cli_rollback_col_size": "Size",
+    "cli_update_title": "GitHub Release Update Check",
+    "cli_update_checking": "Checking for updates via GitHub Releases API...",
+    "cli_update_current": "Current version",
+    "cli_update_latest": "Latest version",
+    "cli_update_status": "Status",
+    "cli_update_download": "Download URL",
+    "cli_update_available": "Update available: v{version} is available!",
+    "cli_update_up_to_date": "You are running the latest version (v{version}).",
+    "cli_update_throttled": "Cooldown active: checked within 24h. Use --force to check now.",
+    "cli_update_error": "Failed to check for updates: {error}",
 })
 
 MESSAGES["ru"].update({
@@ -94,6 +106,16 @@ MESSAGES["ru"].update({
     "cli_rollback_col_date": "Дата создания",
     "cli_rollback_col_files": "Файлов",
     "cli_rollback_col_size": "Размер",
+    "cli_update_title": "Проверка обновлений GitHub",
+    "cli_update_checking": "Проверка обновлений через GitHub Releases API...",
+    "cli_update_current": "Текущая версия",
+    "cli_update_latest": "Последняя версия",
+    "cli_update_status": "Статус",
+    "cli_update_download": "Ссылка для скачивания",
+    "cli_update_available": "Доступно обновление: доступна версия v{version}!",
+    "cli_update_up_to_date": "У вас установлена самая свежая версия (v{version}).",
+    "cli_update_throttled": "Действует кулдаун 24 часа. Используйте флаг --force для немедленной проверки.",
+    "cli_update_error": "Не удалось проверить обновления: {error}",
 })
 
 
@@ -437,5 +459,89 @@ def rollback_command(
         raise typer.Exit(code=1)
 
 
+@app.command("update-check")
+def update_check(
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Bypass 24-hour rate limit cooldown and check immediately",
+    ),
+    open_browser: bool = typer.Option(
+        False,
+        "--open",
+        "-o",
+        help="Open release download page in web browser if update available",
+    ),
+    lang: Optional[str] = typer.Option(
+        None,
+        "--lang",
+        "-l",
+        help="Display language: 'ru' or 'en'",
+    ),
+) -> None:
+    """Check for application updates via GitHub Releases API."""
+    if lang:
+        active_lang = normalize_locale(lang)
+    else:
+        active_lang = _STATE.get("lang") or get_current_locale()
+    console.print(f"[bold cyan]🔍 {t('cli_update_checking', lang=active_lang)}[/]")
+
+    result = check_github_update(current_version=__version__, force=force)
+
+    if result.get("error"):
+        console.print(
+            Panel(
+                f"[bold red]✖ {t('cli_update_error', lang=active_lang, error=result['error'])}[/]",
+                title=f"[bold red]{t('cli_update_title', lang=active_lang)}[/]",
+                box=box.ROUNDED,
+            )
+        )
+        raise typer.Exit(code=1)
+
+    table = Table(box=box.ROUNDED, show_header=False)
+    table.add_column("Key", style="bold white")
+    table.add_column("Value", style="cyan", overflow="fold")
+
+    table.add_row(t("cli_update_current", lang=active_lang), f"v{result['current_version']}")
+    table.add_row(t("cli_update_latest", lang=active_lang), f"v{result['latest_version']}")
+
+    if result.get("throttled"):
+        table.add_row(
+            t("cli_update_status", lang=active_lang),
+            f"[yellow]⏳ {t('cli_update_throttled', lang=active_lang)}[/]",
+        )
+    elif result.get("update_available"):
+        table.add_row(
+            t("cli_update_status", lang=active_lang),
+            f"[bold green]🚀 {t('cli_update_available', lang=active_lang, version=result['latest_version'])}[/]",
+        )
+        if result.get("download_url"):
+            table.add_row(
+                t("cli_update_download", lang=active_lang),
+                f"[link={result['download_url']}]{result['download_url']}[/link]",
+            )
+    else:
+        table.add_row(
+            t("cli_update_status", lang=active_lang),
+            f"[bold green]✔ {t('cli_update_up_to_date', lang=active_lang, version=result['current_version'])}[/]",
+        )
+
+    console.print(
+        Panel(
+            table,
+            title=f"[bold green]{t('cli_update_title', lang=active_lang)}[/]",
+            box=box.ROUNDED,
+        )
+    )
+
+    if result.get("update_available") and result.get("download_url"):
+        console.print(f"[bold cyan]🔗 {t('cli_update_download', lang=active_lang)}:[/] {result['download_url']}")
+
+    if open_browser and result.get("update_available") and result.get("download_url"):
+        open_update_url(result["download_url"])
+
+
 if __name__ == "__main__":
     app()
+

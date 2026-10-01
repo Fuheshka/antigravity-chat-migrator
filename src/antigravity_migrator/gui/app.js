@@ -113,6 +113,15 @@
       inspectorBtnFix: 'Точечное исправление',
       inspectorFixSuccess: 'Диалог успешно исправлен',
       inspectorFixFailed: 'Не удалось исправить диалог',
+      updateSectionTitle: 'Проверка обновлений',
+      updateStatusUpToDate: 'У вас установлена самая свежая версия',
+      updateStatusChecking: 'Проверка обновлений...',
+      updateStatusThrottled: 'Проверка выполнялась недавно (кулдаун 24 часа)',
+      updateStatusAvailable: 'Доступно обновление: версия v{version}',
+      updateStatusError: 'Не удалось проверить обновления',
+      btnCheckUpdates: 'Проверить сейчас',
+      btnDownloadUpdate: 'Скачать обновление',
+      badgeNew: 'NEW',
     },
     en: {
       appTitle: 'Antigravity Chat Migrator',
@@ -218,6 +227,15 @@
       inspectorBtnFix: 'Fix this chat',
       inspectorFixSuccess: 'Conversation repaired successfully',
       inspectorFixFailed: 'Failed to repair conversation',
+      updateSectionTitle: 'Check for updates',
+      updateStatusUpToDate: 'You are running the latest version',
+      updateStatusChecking: 'Checking for updates...',
+      updateStatusThrottled: 'Checked recently (24h cooldown active)',
+      updateStatusAvailable: 'Update available: version v{version}',
+      updateStatusError: 'Failed to check for updates',
+      btnCheckUpdates: 'Check now',
+      btnDownloadUpdate: 'Download update',
+      badgeNew: 'NEW',
     }
   };
 
@@ -235,6 +253,15 @@
     isBusy: false,
     currentView: 'chats',
     selectedConversation: null,
+    update: {
+      checked: false,
+      available: false,
+      latestVersion: null,
+      downloadUrl: null,
+      releaseNotes: null,
+      throttled: false,
+      error: null,
+    },
   };
 
   function t(key, params = {}) {
@@ -278,6 +305,7 @@
     updateProcessBadgeUI();
     renderTable();
     updateFooterCount();
+    renderUpdateUI();
 
     if (state.selectedConversation) {
       openInspectorModal(state.selectedConversation);
@@ -385,6 +413,21 @@
       success: true,
       snapshot_id,
       error: null,
+    }),
+    check_for_updates: async (force) => ({
+      update_available: false,
+      current_version: '0.1.0',
+      latest_version: '0.1.0',
+      download_url: '',
+      release_notes: '',
+      published_at: '',
+      throttled: !force,
+      checked: true,
+      error: null,
+    }),
+    open_update_url: async (url) => ({
+      success: true,
+      url,
     }),
   };
 
@@ -1208,6 +1251,102 @@
     }
   }
 
+  // --- 11.5. Update Checker (app-update-checker standard) ---
+  function renderUpdateUI() {
+    const headerBadge = document.getElementById('headerUpdateBadge');
+    const sidebarBadge = document.getElementById('sidebarUpdateBadge');
+    const statusText = document.getElementById('updateStatusText');
+    const detailsBox = document.getElementById('updateDetailsBox');
+    const detailsTitle = document.getElementById('updateDetailsTitle');
+    const detailsNotes = document.getElementById('updateDetailsNotes');
+
+    const u = state.update;
+
+    if (u.available && u.latestVersion) {
+      if (headerBadge) {
+        headerBadge.textContent = 'NEW v' + u.latestVersion;
+        headerBadge.classList.remove('hidden');
+      }
+      if (sidebarBadge) {
+        sidebarBadge.textContent = 'NEW v' + u.latestVersion;
+        sidebarBadge.classList.remove('hidden');
+      }
+      if (statusText) {
+        statusText.textContent = t('updateStatusAvailable', { version: u.latestVersion });
+        statusText.style.color = '#34d399';
+      }
+      if (detailsBox) {
+        detailsBox.classList.remove('hidden');
+      }
+      if (detailsTitle) {
+        detailsTitle.textContent = t('updateStatusAvailable', { version: u.latestVersion });
+      }
+      if (detailsNotes) {
+        detailsNotes.textContent = u.releaseNotes ? u.releaseNotes.trim() : '';
+      }
+    } else {
+      if (headerBadge) headerBadge.classList.add('hidden');
+      if (sidebarBadge) sidebarBadge.classList.add('hidden');
+      if (detailsBox) detailsBox.classList.add('hidden');
+
+      if (statusText) {
+        if (u.error) {
+          statusText.textContent = t('updateStatusError') + ': ' + u.error;
+          statusText.style.color = '#f87171';
+        } else if (u.throttled) {
+          statusText.textContent = t('updateStatusThrottled');
+          statusText.style.color = 'var(--text-muted)';
+        } else {
+          statusText.textContent = t('updateStatusUpToDate');
+          statusText.style.color = 'var(--text-primary)';
+        }
+      }
+    }
+  }
+
+  async function checkForUpdates(force = false) {
+    const btnCheck = document.getElementById('btnCheckUpdates');
+    const statusText = document.getElementById('updateStatusText');
+
+    if (force && statusText) {
+      statusText.textContent = t('updateStatusChecking');
+      statusText.style.color = 'var(--text-secondary)';
+    }
+
+    if (force && btnCheck) {
+      btnCheck.disabled = true;
+      const textSpan = btnCheck.querySelector('span');
+      if (textSpan) textSpan.textContent = t('updateStatusChecking');
+    }
+
+    try {
+      const bridge = getBridge();
+      const res = await bridge.check_for_updates(force);
+      state.update = {
+        checked: true,
+        available: Boolean(res.update_available),
+        latestVersion: res.latest_version || null,
+        downloadUrl: res.download_url || null,
+        releaseNotes: res.release_notes || null,
+        throttled: Boolean(res.throttled),
+        error: res.error || null,
+      };
+      renderUpdateUI();
+      return res;
+    } catch (err) {
+      if (force) {
+        state.update.error = String(err);
+        renderUpdateUI();
+      }
+    } finally {
+      if (force && btnCheck) {
+        btnCheck.disabled = false;
+        const textSpan = btnCheck.querySelector('span');
+        if (textSpan) textSpan.textContent = t('btnCheckUpdates');
+      }
+    }
+  }
+
   // --- 12. Initialization & Event Wiring ---
   let isInitialized = false;
   let listenersWired = false;
@@ -1360,6 +1499,29 @@
       });
     });
 
+    // Update Checker Buttons
+    const btnCheckUpdates = document.getElementById('btnCheckUpdates');
+    if (btnCheckUpdates) {
+      btnCheckUpdates.addEventListener('click', () => {
+        checkForUpdates(true);
+      });
+    }
+
+    const btnDownloadUpdate = document.getElementById('btnDownloadUpdate');
+    if (btnDownloadUpdate) {
+      btnDownloadUpdate.addEventListener('click', async () => {
+        const url = state.update.downloadUrl;
+        if (url) {
+          try {
+            const bridge = getBridge();
+            await bridge.open_update_url(url);
+          } catch (_) {
+            window.open(url, '_blank');
+          }
+        }
+      });
+    }
+
     // Global keyboard shortcuts (Escape to close modals)
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -1439,6 +1601,11 @@
     await checkProcessStatus();
     setInterval(checkProcessStatus, 4000);
     await handleScan();
+
+    // 4. Silent background update check (delayed 2.5s)
+    setTimeout(() => {
+      checkForUpdates(false).catch(() => {});
+    }, 2500);
   }
 
   // Handle pywebview ready event or DOM ready

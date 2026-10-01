@@ -225,6 +225,44 @@ class TestCliCommands(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Отчет аудита", result.output)
 
+    def test_update_check_up_to_date(self) -> None:
+        """update-check prints up to date when current version is latest."""
+        with patch("antigravity_migrator.cli.check_github_update") as mock_check:
+            mock_check.return_value = {
+                "update_available": False,
+                "current_version": "0.1.0",
+                "latest_version": "0.1.0",
+                "download_url": "",
+                "release_notes": "",
+                "published_at": "",
+                "throttled": False,
+                "checked": True,
+                "error": None,
+            }
+            result = self.runner.invoke(app, ["update-check"])
+            self.assertEqual(result.exit_code, 0)
+            self.assertIn("0.1.0", result.output)
+
+    def test_update_check_new_version(self) -> None:
+        """update-check displays available new version and download URL."""
+        with patch("antigravity_migrator.cli.check_github_update") as mock_check:
+            mock_check.return_value = {
+                "update_available": True,
+                "current_version": "0.1.0",
+                "latest_version": "0.2.0",
+                "download_url": "https://github.com/Fuheshka/antigravity-chat-migrator/releases/v0.2.0",
+                "release_notes": "Added update checker",
+                "published_at": "2026-10-01",
+                "throttled": False,
+                "checked": True,
+                "error": None,
+            }
+            result = self.runner.invoke(app, ["update-check", "--force"])
+            self.assertEqual(result.exit_code, 0)
+            self.assertIn("0.2.0", result.output)
+            self.assertIn("https://github.com/Fuheshka/antigravity-chat-migrator/releases/v0.2.0", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()
+

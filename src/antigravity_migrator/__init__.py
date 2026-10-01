@@ -67,10 +67,20 @@ from antigravity_migrator.gui import (
     get_gui_index_path,
     launch_gui,
 )
+from antigravity_migrator.updater import (
+    check_github_update,
+    get_platform_asset_url,
+    is_version_newer,
+    open_update_url,
+)
 from antigravity_migrator.cli import app
 
 __all__ = [
     "app",
+    "check_github_update",
+    "get_platform_asset_url",
+    "is_version_newer",
+    "open_update_url",
     "GuiBridgeApi",
     "launch_gui",
     "get_gui_asset_dir",

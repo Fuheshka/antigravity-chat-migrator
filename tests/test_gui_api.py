@@ -658,3 +658,35 @@ def test_api_strict_json_contract(mock_path_manager: PathManager):
     assert "snapshot_id" in decoded
 
 
+def test_gui_api_check_for_updates(mock_path_manager: PathManager):
+    """Test check_for_updates bridge method."""
+    api = GuiBridgeApi(path_manager=mock_path_manager)
+    with patch("antigravity_migrator.gui_api.check_github_update") as mock_check:
+        mock_check.return_value = {
+            "update_available": True,
+            "current_version": "0.1.0",
+            "latest_version": "0.2.0",
+            "download_url": "https://example.com/dl.dmg",
+            "release_notes": "Notes",
+            "published_at": "2026-10-01",
+            "throttled": False,
+            "checked": True,
+            "error": None,
+        }
+        res = api.check_for_updates(force=True)
+        assert res["update_available"] is True
+        assert res["latest_version"] == "0.2.0"
+        assert json.dumps(res)
+
+
+def test_gui_api_open_update_url(mock_path_manager: PathManager):
+    """Test open_update_url bridge method."""
+    api = GuiBridgeApi(path_manager=mock_path_manager)
+    with patch("antigravity_migrator.gui_api.updater_open_url", return_value=True) as mock_open:
+        res = api.open_update_url("https://example.com/release")
+        mock_open.assert_called_once_with("https://example.com/release")
+        assert res["success"] is True
+        assert res["url"] == "https://example.com/release"
+        assert json.dumps(res)
+
+

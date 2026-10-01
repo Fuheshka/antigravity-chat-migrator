@@ -18,7 +18,10 @@
           </svg>
           <div class="brand-info">
             <span class="brand-title">Antigravity</span>
-            <span class="version-tag" id="appVersion">v0.1.0</span>
+            <div class="version-badges">
+              <span class="version-tag" id="appVersion">v0.1.0</span>
+              <span class="badge-new-version hidden" id="headerUpdateBadge">NEW</span>
+            </div>
           </div>
         </div>
       </div>
@@ -119,6 +122,7 @@
               </svg>
               <span class="nav-label" data-i18n="navSettings">Настройки</span>
             </div>
+            <span class="badge-new-nav hidden" id="sidebarUpdateBadge">NEW</span>
           </button>
         </nav>
       </div>
@@ -357,6 +361,35 @@
           </header>
 
           <div class="settings-grid">
+            <div class="setting-card setting-card-wide" id="cardUpdateChecker">
+              <div class="update-header-row">
+                <div class="update-text-group">
+                  <span class="setting-title" data-i18n="updateSectionTitle">Проверка обновлений</span>
+                  <span class="setting-value" id="updateStatusText" data-i18n="updateStatusUpToDate">У вас установлена самая свежая версия</span>
+                </div>
+                <button id="btnCheckUpdates" class="btn btn-secondary btn-sm" type="button">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                  </svg>
+                  <span data-i18n="btnCheckUpdates">Проверить сейчас</span>
+                </button>
+              </div>
+              <div id="updateDetailsBox" class="update-details-box hidden">
+                <div class="update-details-info">
+                  <div class="update-details-title" id="updateDetailsTitle">Доступно обновление</div>
+                  <div class="update-details-notes" id="updateDetailsNotes"></div>
+                </div>
+                <button id="btnDownloadUpdate" class="btn btn-primary btn-sm" type="button">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  <span data-i18n="btnDownloadUpdate">Скачать обновление</span>
+                </button>
+              </div>
+            </div>
+
             <div class="setting-card">
               <span class="setting-title" data-i18n="lblDataDir">Каталог данных Antigravity</span>
               <span class="setting-value" id="settingDataDir">~/.gemini/antigravity</span>

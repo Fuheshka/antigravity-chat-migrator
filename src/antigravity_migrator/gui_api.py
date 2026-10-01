@@ -21,6 +21,10 @@ from antigravity_migrator.project_registry import (
     normalize_workspace_uri,
 )
 from antigravity_migrator.service import AuditReport, MigratorService, SyncResult
+from antigravity_migrator.updater import (
+    check_github_update,
+    open_update_url as updater_open_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -364,3 +368,34 @@ class GuiBridgeApi:
                 "snapshot_id": snapshot_id,
                 "error": str(e),
             }
+
+    def check_for_updates(self, force: bool = False) -> Dict[str, Any]:
+        """Check for application updates via GitHub Releases API."""
+        try:
+            return check_github_update(
+                current_version=__version__,
+                force=force,
+            )
+        except Exception as e:
+            logger.exception("Error in check_for_updates: %s", e)
+            return {
+                "update_available": False,
+                "current_version": __version__,
+                "latest_version": __version__,
+                "download_url": "",
+                "release_notes": "",
+                "published_at": "",
+                "throttled": False,
+                "checked": False,
+                "error": str(e),
+            }
+
+    def open_update_url(self, url: str) -> Dict[str, Any]:
+        """Open release download page in the default web browser."""
+        try:
+            success = updater_open_url(url)
+            return {"success": success, "url": url}
+        except Exception as e:
+            logger.exception("Error in open_update_url: %s", e)
+            return {"success": False, "url": url, "error": str(e)}
+
