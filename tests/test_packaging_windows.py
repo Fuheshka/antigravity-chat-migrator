@@ -226,5 +226,93 @@ class TestPackagingWindows(unittest.TestCase):
                 self.assertIn("Antigravity-Chat-Migrator/README_WINDOWS.txt", namelist)
 
 
+class TestInnoSetupScript(unittest.TestCase):
+    """Validate packaging/windows/setup.iss for Inno Setup 6 compliance."""
+
+    def setUp(self):
+        self.repo_root = Path(__file__).resolve().parent.parent
+        self.iss_path = self.repo_root / "packaging" / "windows" / "setup.iss"
+
+    def _content(self) -> str:
+        self.assertTrue(self.iss_path.is_file(), f"setup.iss not found at {self.iss_path}")
+        return self.iss_path.read_text(encoding="utf-8")
+
+    def test_setup_iss_exists(self):
+        """setup.iss must exist in packaging/windows/."""
+        self.assertTrue(self.iss_path.is_file(), f"Missing: {self.iss_path}")
+
+    def test_privileges_and_architecture(self):
+        """Installer must require no UAC and target x64 only."""
+        text = self._content()
+        self.assertIn("PrivilegesRequired=lowest", text,
+                      "PrivilegesRequired=lowest missing — UAC-free install required")
+        self.assertIn("ArchitecturesAllowed=x64compatible", text)
+        self.assertIn("ArchitecturesInstallIn64BitMode=x64compatible", text)
+
+    def test_app_identity_and_version(self):
+        """AppId, AppName, AppVersion and publisher must match project spec."""
+        text = self._content()
+        # Inno Setup preprocessor syntax: #define AppId "{{GUID}"
+        # {{ is an escaped literal {, and the GUID ends with a single }
+        self.assertTrue(
+            re.search(r'#define\s+AppId\s+"\{\{[0-9A-Fa-f-]{36}\}"', text),
+            "AppId #define with valid GUID not found in setup.iss"
+        )
+        self.assertIn("AppId={#AppId}", text, "AppId preprocessor reference missing")
+        self.assertIn("Antigravity Chat Migrator", text)
+        # Version is in #define AppVersion, referenced as AppVersion={#AppVersion}
+        self.assertIn('#define AppVersion   "0.1.0"', text,
+                      "AppVersion #define must match pyproject.toml version 0.1.0")
+        self.assertIn("AppVersion={#AppVersion}", text, "AppVersion preprocessor reference missing")
+        self.assertIn("Daniil K. (Fuheshka)", text)
+        self.assertIn("github.com/Fuheshka/antigravity-chat-migrator", text)
+
+    def test_binary_references(self):
+        """setup.iss must reference both GUI and CLI binaries, README, LICENSE."""
+        text = self._content()
+        self.assertIn("Antigravity Chat Migrator.exe", text,
+                      "GUI binary reference missing")
+        self.assertIn("agy-migrator.exe", text,
+                      "CLI binary reference missing")
+        self.assertIn("run_fix.bat", text,
+                      "run_fix.bat reference missing")
+        self.assertIn("README_WINDOWS.txt", text,
+                      "README_WINDOWS.txt reference missing")
+        self.assertIn("LICENSE", text,
+                      "LICENSE reference missing")
+        self.assertIn("AppIcon.ico", text,
+                      "AppIcon.ico reference missing")
+
+    def test_shortcuts_and_path_task(self):
+        """setup.iss must define Start Menu shortcut, desktop task and PATH task."""
+        text = self._content()
+        self.assertIn("desktopicon", text,
+                      "Desktop icon task missing")
+        self.assertIn("addtopath", text,
+                      "PATH registration task missing")
+        self.assertIn("HKCU", text,
+                      "HKCU registry entry missing — PATH mod must use HKCU")
+        self.assertIn('"Path"', text,
+                      "PATH registry ValueName missing")
+
+    def test_bilingual_languages(self):
+        """setup.iss must declare both english and russian language sections."""
+        text = self._content()
+        self.assertIn('Name: "english"', text,
+                      "English language declaration missing")
+        self.assertIn('Name: "russian"', text,
+                      "Russian language declaration missing")
+        self.assertIn("english.AddToPathDesc", text)
+        self.assertIn("russian.AddToPathDesc", text)
+
+    def test_uninstall_cleanup(self):
+        """Uninstaller must clean registry PATH entry and leftover dirs."""
+        text = self._content()
+        self.assertIn("[UninstallDelete]", text,
+                      "[UninstallDelete] section missing")
+        self.assertIn("CurUninstallStepChanged", text,
+                      "PATH cleanup function missing from [Code] section")
+
+
 if __name__ == "__main__":
     unittest.main()

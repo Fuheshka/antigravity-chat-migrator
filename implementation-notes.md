@@ -894,3 +894,26 @@
 - Синтаксис спецификации проверен компилятором: `python -m py_compile packaging/windows/migrator.spec` завершился без ошибок.
 - Тестовый набор Windows упаковки: `tests/test_packaging_windows.py` (7 тестов, 100% pass).
 - Общий тестовый набор проекта: 191 тест, 100% pass (1.96s).
+
+## 2026-10-01: Промпт 9.1 — Скрипт инсталлятора Inno Setup 6 для Windows (setup.iss)
+
+### Принятые архитектурные и инженерные решения
+1. **Файл скрипта `packaging/windows/setup.iss`:**
+   - Режим установки `PrivilegesRequired=lowest`: установка в `%LOCALAPPDATA%\Programs\Antigravity Chat Migrator` без всплывающего окна UAC, без прав администратора.
+   - Целевая архитектура: `ArchitecturesAllowed=x64compatible` + `ArchitecturesInstallIn64BitMode=x64compatible`.
+   - Мультиязычность: встроенные секции `[Languages]` с файлами `Default.isl` (EN) и `Languages\Russian.isl` (RU); `ShowLanguageDialog=auto` для автоопределения языка ОС; кастомные строки в `[CustomMessages]` для обеих локалей.
+   - Все идентификаторы через ISS-препроцессор (`#define`): `AppName`, `AppVersion` (`0.1.0` синхронизировано с `pyproject.toml`), `AppPublisher`, `AppURL`, `AppId` (GUID).
+   - Секция `[Files]`: оба бинарника, `run_fix.bat`, `README_WINDOWS.txt`, `LICENSE`.
+   - Секция `[Icons]`: ярлык в меню «Пуск» (GUI), опциональный ярлык на рабочем столе (`checkedonce`), запись «Удалить программу».
+   - Секция `[Tasks]`: `desktopicon` (включён по умолчанию) и `addtopath` (выключен по умолчанию).
+   - Секция `[Registry]`: `HKCU\Environment\Path` через `expandsz` + `NeedsAddPath` для защиты от дублирования.
+   - Секция `[UninstallDelete]`: очистка `cache/` и `logs/` при удалении.
+   - Pascal-процедура `CurUninstallStepChanged`: удаляет запись из PATH при деинсталляции.
+   - LZMA2/ultra64 + `SolidCompression=yes` для минимального размера установщика.
+2. **Тесты `tests/test_packaging_windows.py` (класс `TestInnoSetupScript`, 7 тестов):**
+   - Покрыты: существование файла, привилегии, архитектура, AppId/GUID, версия, имя издателя, оба бинарника, ярлыки, PATH-таск, двуязычность, очистка при удалении.
+
+### Результаты тестирования
+- Выполнен полный цикл TDD: исправление 3 регулярок под ISS-препроцессорный формат -> GREEN.
+- `tests/test_packaging_windows.py`: 14 тестов, 100% pass (0.12s).
+- Общий тестовый набор проекта: **198 тестов, 100% pass (1.88s)**.
