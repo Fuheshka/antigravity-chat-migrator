@@ -947,3 +947,28 @@
 - TDD RED: 3 failing tests -> TDD GREEN: 17 passing tests.
 - Полный набор тестов: 201 passed in 1.85s.
 
+## 2026-10-01: Промпт 9.3: Интеграция Inno Setup и релизных артефактов Windows в GitHub Actions (release.yml)
+
+### Принятые архитектурные и инженерные решения
+1. **Автоматическая установка Inno Setup в CI (`build-windows`):**
+   - В джобу `build-windows` раннера `windows-latest` добавлен шаг установки Inno Setup через пакетный менеджер Chocolatey: `choco install innosetup --no-progress`.
+   - Компилятор `ISCC.exe` обнаруживается скриптом `packaging/windows/build_windows.ps1` в стандартных путях Program Files без необходимости ручной модификации PATH.
+2. **Сборка и загрузка полного набора Windows-артефактов:**
+   - Шаг сборки запускает `.\packaging\windows\build_windows.ps1 -Clean` в оболочке `pwsh`.
+   - В шаге `actions/upload-artifact@v4` настроена загрузка трех Windows-артефактов:
+     - `dist/Antigravity-Chat-Migrator-Windows-x64-Setup.exe` (инсталлятор Inno Setup)
+     - `dist/Antigravity-Chat-Migrator-Windows-x64-Portable.zip` (портативный архив с GUI, CLI и bat-скриптом)
+     - `dist/windows/agy-migrator.exe` (автономный консольный бинарник)
+3. **Очистка структуры и расчет контрольных сумм в `publish-release`:**
+   - Добавлен шаг выравнивания артефактов из вложенных папок: `find . -mindepth 2 -type f -exec mv -t . {} + ...` и удаление пустых каталогов.
+   - Единый расчет хешей `SHA256SUMS.txt` для всех платформ (macOS DMG, macOS CLI, Windows Setup, Windows Portable ZIP, Windows CLI).
+   - Формирование структурированного тела релиза `release_notes.md` с явными ссылками на скачивание для Windows и macOS, а также таблицей SHA256-сумм.
+   - Поддержка создания нового релиза (`gh release create`) с флагами `--notes-file` и `--generate-notes`, а также бесшовного обновления существующего релиза (`gh release upload --clobber` и `gh release edit --notes-file`).
+4. **Тестирование по стандарту TDD (`tests/test_packaging_windows.py`):**
+   - Реализован тестовый класс `TestReleaseWorkflow` (3 теста): валидация синтаксиса YAML через `yaml.safe_load`, проверка шагов `build-windows` (Inno Setup, ps1, 3 артефакта) и проверка шагов `publish-release` (контрольные суммы и ссылки на релизные файлы).
+
+### Результаты тестирования
+- TDD RED: 2 failing tests -> TDD GREEN: 20 passing tests в модуле `test_packaging_windows.py`.
+- Полный набор тестов: 204 passed in 2.01s.
+- YAML-синтаксис проверен и подтвержден парсером PyYAML.
+

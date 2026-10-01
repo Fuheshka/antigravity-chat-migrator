@@ -391,5 +391,65 @@ class TestInnoSetupScript(unittest.TestCase):
                       "PATH cleanup function missing from [Code] section")
 
 
+class TestReleaseWorkflow(unittest.TestCase):
+    """Validate .github/workflows/release.yml for Windows & macOS CI/CD packaging."""
+
+    def setUp(self):
+        self.repo_root = Path(__file__).resolve().parent.parent
+        self.workflow_path = self.repo_root / ".github" / "workflows" / "release.yml"
+
+    def _load_workflow(self) -> dict:
+        self.assertTrue(self.workflow_path.is_file(), f"release.yml not found at {self.workflow_path}")
+        text = self.workflow_path.read_text(encoding="utf-8")
+        try:
+            import yaml
+            data = yaml.safe_load(text)
+            self.assertIsInstance(data, dict)
+            return data
+        except ImportError:
+            return {}
+
+    def test_workflow_yaml_validity_and_jobs(self):
+        """release.yml must exist, be valid YAML, and contain expected jobs."""
+        data = self._load_workflow()
+        self.assertTrue(self.workflow_path.is_file())
+        text = self.workflow_path.read_text(encoding="utf-8")
+        self.assertIn("name: Release", text)
+        if data:
+            jobs = data.get("jobs", {})
+            self.assertIn("build-macos", jobs)
+            self.assertIn("build-windows", jobs)
+            self.assertIn("publish-release", jobs)
+
+    def test_build_windows_inno_setup_and_artifacts(self):
+        """build-windows job must install Inno Setup, build artifacts, and upload all 3 Windows packages."""
+        text = self.workflow_path.read_text(encoding="utf-8")
+        # Inno Setup installation via chocolatey
+        self.assertIn("choco install innosetup --no-progress", text)
+
+        # Build script invocation
+        self.assertRegex(text, r'build_windows\.ps1\s+-Clean')
+
+        # Upload Windows artifacts paths
+        self.assertIn("dist/Antigravity-Chat-Migrator-Windows-x64-Setup.exe", text)
+        self.assertIn("dist/Antigravity-Chat-Migrator-Windows-x64-Portable.zip", text)
+        self.assertIn("dist/windows/agy-migrator.exe", text)
+
+    def test_publish_release_windows_and_macos_checksums(self):
+        """publish-release must include Windows Setup/Portable and macOS in checksums and notes."""
+        text = self.workflow_path.read_text(encoding="utf-8")
+        # Needs both jobs
+        self.assertIn("needs: [build-macos, build-windows]", text)
+
+        # SHA256 checksums step
+        self.assertIn("SHA256SUMS.txt", text)
+
+        # Release notes must have Windows sections for Installer and Portable
+        self.assertIn("Antigravity-Chat-Migrator-Windows-x64-Setup.exe", text)
+        self.assertIn("Antigravity-Chat-Migrator-Windows-x64-Portable.zip", text)
+        self.assertIn("Antigravity-Chat-Migrator-macOS.dmg", text)
+
+
 if __name__ == "__main__":
     unittest.main()
+
