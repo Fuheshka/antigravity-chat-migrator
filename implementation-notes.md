@@ -917,3 +917,33 @@
 - Выполнен полный цикл TDD: исправление 3 регулярок под ISS-препроцессорный формат -> GREEN.
 - `tests/test_packaging_windows.py`: 14 тестов, 100% pass (0.12s).
 - Общий тестовый набор проекта: **198 тестов, 100% pass (1.88s)**.
+
+## 2026-10-01: Промпт 9.2 - Скрипты сборки Windows (PowerShell и Batch) с Inno Setup и Portable ZIP
+
+### Принятые архитектурные и инженерные решения
+1. **Сквозной пайплайн сборки в `build_windows.ps1` (6 шагов):**
+   - **Шаг 1 (Окружение):** Определение Python (`.venv`, `py`, `python`), проверка наличия и автоустановка PyInstaller и Pillow при необходимости.
+   - **Шаг 2 (Иконки):** Автоматическая генерация актуальных `AppIcon.ico` и `app.ico` через `generate_ico.py` при их отсутствии или обновлении исходного `AppIcon.png`.
+   - **Шаг 3 (Компиляция PyInstaller):** Запуск PyInstaller по спецификации `migrator.spec` без принудительного `--noconsole` на уровне CLI (консольные параметры изолированы внутри спецификации). Строгая валидация генерации обоих исполняемых файлов: GUI (`dist/windows/Antigravity Chat Migrator.exe`) и CLI (`dist/windows/agy-migrator.exe`).
+   - **Шаг 4 (Inno Setup ISCC):** Автоматический поиск компилятора `ISCC.exe` в системном `PATH`, а также в стандартных путях (`${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe`, `$env:ProgramFiles\Inno Setup 6\ISCC.exe`). При наличии компилятора собирает установщик `dist/Antigravity-Chat-Migrator-Windows-x64-Setup.exe` с передачей флага `/O$DistRoot`. Если Inno Setup не обнаружен, выводит предупреждение и продолжает работу, собирая только портативную версию. Поддержан флаг `-NoSetup` для принудительного пропуска шага.
+   - **Шаг 5 (Портативный ZIP-архив):** Сборка дистрибутива `dist/Antigravity-Chat-Migrator-Windows-x64-Portable.zip`, содержащего оба бинарника (GUI и CLI), командный файл `run_fix.bat` и документацию `README_WINDOWS.txt`.
+   - **Шаг 6 (Контрольные суммы SHA256):** Автоматический расчет и наглядный вывод хеш-сумм SHA256 для всех созданных пакетов дистрибуции (`Setup.exe` и `Portable.zip`) через командлет `Get-FileHash`.
+2. **Зеркальный командный файл `build_windows.bat`:**
+   - Поддерживает аналогичные параметры вызова: `--clean` (`/clean`, `-c`), `--nozip` (`/nozip`), `--nosetup` (`/nosetup`).
+   - Выполняет компиляцию обоих бинарников через PyInstaller по `migrator.spec`.
+   - Реализует поиск `ISCC.exe` в PATH и путях Program Files с перемещением готового установщика в `dist/`.
+   - Формирует портативный ZIP-архив `Antigravity-Chat-Migrator-Windows-x64-Portable.zip` и вычисляет контрольные суммы SHA256 (через `powershell Get-FileHash` или нативную утилиту `certutil`).
+3. **Обновление документации `README_WINDOWS.txt`:**
+   - Детально описаны оба формата поставки: инсталлятор `Setup.exe` (UAC-free установка в профиль пользователя, добавление в PATH, ярлыки) и портативный архив `Portable.zip`.
+   - Добавлены разделы по запуску графического лаунчера `Antigravity Chat Migrator.exe`, быстрому запуску через `run_fix.bat` и командам консольной утилиты `agy-migrator.exe`.
+   - Указаны пути расположения баз данных и кэшей на Windows, системные требования и блок авторства Даниил К. (Fuheshka).
+4. **Тестирование и валидация (`tests/test_packaging_windows.py`):**
+   - Добавлены тесты `test_powershell_build_pipeline_steps` и `test_batch_build_pipeline_steps`, проверяющие наличие всех 6 шагов и ключевых артефактов в обоих скриптах.
+   - Обновлен тест `test_staging_and_zip_creation_simulation` для работы с именем архива `Antigravity-Chat-Migrator-Windows-x64-Portable.zip`.
+   - Добавлен тест `test_readme_windows_documentation`, проверяющий освещение GUI, CLI и инсталлятора.
+   - Все 17 тестов в модуле и 201 тест по всему проекту успешно проходят.
+
+### Результаты тестирования
+- TDD RED: 3 failing tests -> TDD GREEN: 17 passing tests.
+- Полный набор тестов: 201 passed in 1.85s.
+

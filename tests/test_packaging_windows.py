@@ -190,6 +190,68 @@ class TestPackagingWindows(unittest.TestCase):
         self.assertEqual(counts["("], 0, "Unbalanced ( in build_windows.ps1")
         self.assertEqual(counts["["], 0, "Unbalanced [ in build_windows.ps1")
 
+    def test_powershell_build_pipeline_steps(self):
+        """Verify build_windows.ps1 implements all 6 required pipeline steps."""
+        ps1_path = self.windows_pkg_dir / "build_windows.ps1"
+        text = ps1_path.read_text(encoding="utf-8")
+
+        # Step 1: Python, PyInstaller, Pillow
+        self.assertIn("PyInstaller", text)
+        self.assertIn("Pillow", text)
+
+        # Step 2: AppIcon.ico and app.ico
+        self.assertIn("AppIcon.ico", text)
+        self.assertIn("app.ico", text)
+        self.assertIn("generate_ico.py", text)
+
+        # Step 3: PyInstaller migrator.spec and both executables
+        self.assertIn("migrator.spec", text)
+        self.assertIn("Antigravity Chat Migrator.exe", text)
+        self.assertIn("agy-migrator.exe", text)
+
+        # Step 4: Inno Setup (ISCC.exe) detection and Setup.exe output
+        self.assertIn("ISCC.exe", text)
+        self.assertIn("setup.iss", text)
+        self.assertIn("Antigravity-Chat-Migrator-Windows-x64-Setup.exe", text)
+
+        # Step 5: Portable ZIP distribution
+        self.assertIn("Antigravity-Chat-Migrator-Windows-x64-Portable.zip", text)
+        self.assertIn("run_fix.bat", text)
+        self.assertIn("README_WINDOWS.txt", text)
+
+        # Step 6: SHA256 checksum calculation
+        self.assertIn("SHA256", text)
+        self.assertIn("Get-FileHash", text)
+
+    def test_batch_build_pipeline_steps(self):
+        """Verify build_windows.bat implements matching pipeline steps and flags."""
+        bat_path = self.windows_pkg_dir / "build_windows.bat"
+        text = bat_path.read_text(encoding="utf-8")
+
+        # Step 1 & 2: Environment and icons
+        self.assertIn("PyInstaller", text)
+        self.assertIn("Pillow", text)
+        self.assertIn("AppIcon.ico", text)
+        self.assertIn("app.ico", text)
+
+        # Step 3: migrator.spec and dual binaries
+        self.assertIn("migrator.spec", text)
+        self.assertIn("Antigravity Chat Migrator.exe", text)
+        self.assertIn("agy-migrator.exe", text)
+
+        # Step 4: ISCC.exe detection and Setup.exe output
+        self.assertIn("ISCC.exe", text)
+        self.assertIn("setup.iss", text)
+        self.assertIn("Antigravity-Chat-Migrator-Windows-x64-Setup.exe", text)
+
+        # Step 5: Portable ZIP distribution
+        self.assertIn("Antigravity-Chat-Migrator-Windows-x64-Portable.zip", text)
+        self.assertIn("run_fix.bat", text)
+        self.assertIn("README_WINDOWS.txt", text)
+
+        # Step 6: SHA256 checksums
+        self.assertIn("SHA256", text)
+
     def test_staging_and_zip_creation_simulation(self):
         """Simulate packaging pipeline creating the portable ZIP distribution."""
         with tempfile.TemporaryDirectory() as td:
@@ -208,7 +270,7 @@ class TestPackagingWindows(unittest.TestCase):
             shutil.copy(self.windows_pkg_dir / "README_WINDOWS.txt", stage_dir / "README_WINDOWS.txt")
 
             # Create zip
-            zip_dest = Path(td) / "Antigravity-Chat-Migrator-Windows-x64.zip"
+            zip_dest = Path(td) / "Antigravity-Chat-Migrator-Windows-x64-Portable.zip"
             with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
                 for file_path in stage_dir.rglob("*"):
                     if file_path.is_file():
@@ -224,6 +286,21 @@ class TestPackagingWindows(unittest.TestCase):
                 self.assertIn("Antigravity-Chat-Migrator/agy-migrator.exe", namelist)
                 self.assertIn("Antigravity-Chat-Migrator/run_fix.bat", namelist)
                 self.assertIn("Antigravity-Chat-Migrator/README_WINDOWS.txt", namelist)
+
+    def test_readme_windows_documentation(self):
+        """Verify README_WINDOWS.txt covers GUI launcher, CLI, and Installer."""
+        readme_path = self.windows_pkg_dir / "README_WINDOWS.txt"
+        text = readme_path.read_text(encoding="utf-8")
+
+        # GUI launcher
+        self.assertIn("Antigravity Chat Migrator.exe", text)
+
+        # CLI
+        self.assertIn("agy-migrator.exe", text)
+
+        # Installer & Portable
+        self.assertIn("Setup.exe", text)
+        self.assertIn("Portable.zip", text)
 
 
 class TestInnoSetupScript(unittest.TestCase):
