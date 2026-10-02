@@ -995,3 +995,19 @@
 
 ### Результаты тестирования
 - 204 passed in 2.35s локально.
+
+## 2026-10-03: Исправление CustomMessage ViewReadme в Inno Setup (setup.iss)
+
+### Обнаруженная проблема в Release CI
+- При сборке Windows-инсталлятора компилятор Inno Setup 6 (`ISCC.exe`) завершался с ошибкой:
+  `Error on line 123 in setup.iss: A custom message named "ViewReadme" has not been defined.`
+- В секции `[Run]` использовалась переменная `{cm:ViewReadme}`, которая не является встроенной переменной Inno Setup (в отличие от `LaunchProgram` и `UninstallProgram`), и не была объявлена в секции `[CustomMessages]`.
+
+### Принятые решения
+1. В секцию `[CustomMessages]` файла `packaging/windows/setup.iss` добавлены двуязычные строки:
+   - `english.ViewReadme=View README.txt`
+   - `russian.ViewReadme=Открыть README.txt`
+2. В `tests/test_packaging_windows.py` добавлен автоматический регрессионный тест `test_all_custom_messages_defined`, парсящий все `{cm:...}` в `setup.iss` и гарантирующий наличие их переводов в `[CustomMessages]`.
+
+### Результаты тестирования
+- 205 passed in 2.44s.

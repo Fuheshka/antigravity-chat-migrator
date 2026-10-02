@@ -78,11 +78,13 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 english.DesktopIconDesc=Create a &desktop shortcut
 english.AddToPathDesc=Add CLI utility agy-migrator to system &PATH (current user)
 english.AddToPathNote=Required for running 'agy-migrator' from any terminal without the full path.
+english.ViewReadme=View README.txt
 
 ; Russian
 russian.DesktopIconDesc=Создать ярлык на &рабочем столе
 russian.AddToPathDesc=Добавить CLI-утилиту agy-migrator в системный &PATH (текущий пользователь)
 russian.AddToPathNote=Позволяет запускать 'agy-migrator' из любого терминала без указания полного пути.
+russian.ViewReadme=Открыть README.txt
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIconDesc}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce

@@ -381,6 +381,17 @@ class TestInnoSetupScript(unittest.TestCase):
                       "Russian language declaration missing")
         self.assertIn("english.AddToPathDesc", text)
         self.assertIn("russian.AddToPathDesc", text)
+        self.assertIn("english.ViewReadme", text)
+        self.assertIn("russian.ViewReadme", text)
+
+    def test_all_custom_messages_defined(self):
+        """Every {cm:Name} in setup.iss must be defined in [CustomMessages] or be built-in."""
+        text = self._content()
+        builtins = {"AdditionalIcons", "UninstallProgram", "LaunchProgram"}
+        cm_refs = set(re.findall(r'\{cm:([A-Za-z0-9_]+)', text)) - builtins
+        for cm in cm_refs:
+            self.assertIn(f"english.{cm}", text, f"Missing english.{cm} in [CustomMessages]")
+            self.assertIn(f"russian.{cm}", text, f"Missing russian.{cm} in [CustomMessages]")
 
     def test_uninstall_cleanup(self):
         """Uninstaller must clean registry PATH entry and leftover dirs."""
