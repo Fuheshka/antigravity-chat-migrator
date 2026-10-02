@@ -1,3 +1,5 @@
+import contextlib
+import gc
 import sqlite3
 import tempfile
 import unittest
@@ -18,19 +20,30 @@ from antigravity_migrator.db_manager import (
 )
 
 
+@contextlib.contextmanager
+def _open_test_conn(db_path, timeout=5.0):
+    conn = sqlite3.connect(str(db_path), timeout=timeout)
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
 class TestDatabaseManager(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.base_dir = Path(self.tmp_dir.name)
 
     def tearDown(self):
+        gc.collect()
         self.tmp_dir.cleanup()
 
     def _create_sample_trajectory_db(
         self, db_path: Path, blob: bytes | None = None
     ) -> Path:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(str(db_path)) as conn:
+        with _open_test_conn(db_path) as conn:
             conn.execute(
                 "CREATE TABLE trajectory_metadata_blob (id TEXT PRIMARY KEY DEFAULT 'main', data BLOB)"
             )
@@ -43,7 +56,7 @@ class TestDatabaseManager(unittest.TestCase):
 
     def _create_sample_summaries_db(self, db_path: Path) -> Path:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(str(db_path)) as conn:
+        with _open_test_conn(db_path) as conn:
             conn.execute(
                 """
                 CREATE TABLE conversation_summaries (
@@ -110,7 +123,7 @@ class TestDatabaseManager(unittest.TestCase):
 
         # DB without table
         empty_db = self.base_dir / "empty.db"
-        with sqlite3.connect(str(empty_db)) as conn:
+        with _open_test_conn(empty_db) as conn:
             conn.execute("CREATE TABLE foo (id INT)")
         self.assertIsNone(extract_workspace_uri(empty_db))
 
@@ -140,7 +153,7 @@ class TestDatabaseManager(unittest.TestCase):
         self.assertEqual(extract_workspace_uri(db_path), "file:///Users/dev/project-v2")
 
         # Verify atomic write in DB directly
-        with sqlite3.connect(str(db_path)) as conn:
+        with _open_test_conn(db_path) as conn:
             cur = conn.cursor()
             cur.execute("SELECT data FROM trajectory_metadata_blob WHERE id = 'main'")
             row = cur.fetchone()
@@ -151,7 +164,7 @@ class TestDatabaseManager(unittest.TestCase):
         db_path = self._create_sample_summaries_db(
             self.base_dir / "conversation_summaries.db"
         )
-        with sqlite3.connect(str(db_path)) as conn:
+        with _open_test_conn(db_path) as conn:
             conn.execute(
                 "INSERT INTO conversation_summaries (conversation_id, title, project_id, raw_summary) "
                 "VALUES ('uuid-1', 'Refactor Parser', 'proj-1', ?)",
@@ -185,7 +198,7 @@ class TestDatabaseManager(unittest.TestCase):
         db_path = self._create_sample_summaries_db(
             self.base_dir / "conversation_summaries.db"
         )
-        with sqlite3.connect(str(db_path)) as conn:
+        with _open_test_conn(db_path) as conn:
             conn.execute(
                 "INSERT INTO conversation_summaries (conversation_id, title, project_id, raw_summary) "
                 "VALUES ('uuid-10', 'Old Title', 'old-proj', ?)",
@@ -246,7 +259,7 @@ class TestDatabaseManager(unittest.TestCase):
         update_trajectory_metadata(db_path, b"test")
 
         # Verify busy_timeout is set when executing operations
-        with sqlite3.connect(str(db_path), timeout=5.0) as conn:
+        with _open_test_conn(db_path, timeout=5.0) as conn:
             conn.execute("PRAGMA busy_timeout = 5000")
             cur = conn.cursor()
             cur.execute("PRAGMA busy_timeout")

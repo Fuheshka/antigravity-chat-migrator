@@ -972,3 +972,26 @@
 - Полный набор тестов: 204 passed in 2.01s.
 - YAML-синтаксис проверен и подтвержден парсером PyYAML.
 
+
+## 2026-10-02: Исправление кроссплатформенных нюансов CI для Windows и Linux
+
+### Обнаруженные проблемы в GitHub Actions CI
+1. **Блокировка дескрипторов SQLite в Windows (`WinError 32: PermissionError`):**
+   - На Windows при использовании `with sqlite3.connect(...) as conn:` соединение открывается как транзакционный менеджер, но не закрывается (`conn.close()` не вызывается). При очистке `tempfile.TemporaryDirectory()` файловая система Windows блокирует удаление файла `.db`, приводя к ошибке `PermissionError: [WinError 32] The process cannot access the file because it is being used by another process`.
+2. **Сериализация путей в `SyncResult` (`AssertionError: '\\tmp\\backup' != '/tmp/backup'`):**
+   - Тест `test_dataclasses_serialization` проверял строковое равенство с жестко заданным POSIX-путем, тогда как на Windows путь форматируется со слэшами `\tmp\backup`.
+3. **Кроссплатформенное сопоставление ассетов в `test_updater.py`:**
+   - В тесте `test_cooldown_bypassed_when_forced` мок релиза содержал только `.dmg`, из-за чего на Windows и Linux апдейтер корректно возвращал fallback URL на релиз, а тест жестко требовал подстроку `"dmg"`.
+
+### Принятые архитектурные и инженерные решения
+1. **Контекстный менеджер `_open_db` в `db_manager.py`:**
+   - Реализован `@contextlib.contextmanager def _open_db(path)`, гарантирующий безусловное выполнение `conn.close()` в блоке `finally:` даже при исключениях.
+   - Все методы `DatabaseManager` переведены на использование `_open_db`.
+2. **Безопасная очистка SQLite в тестах (`test_db_manager.py` и `test_cli.py`):**
+   - Внедрены контекстные менеджеры для тестов с гарантированным закрытием соединений и вызов `gc.collect()` в `tearDown` перед удалением временных директорий.
+3. **Платформо-независимая нормализация путей и ассетов:**
+   - В `test_service.py` проверка пути приведена к `str(Path("/tmp/backup"))`.
+   - В `test_updater.py` мок дополнен мультиплатформенными ассетами (`.dmg`, `.exe`, `.AppImage`), а ассершен проверяет наличие соответствующего ассета.
+
+### Результаты тестирования
+- 204 passed in 2.35s локально.

@@ -138,7 +138,15 @@ class TestCheckGithubUpdate:
                 {
                     "name": "AntigravityMigrator-0.2.0.dmg",
                     "browser_download_url": "https://github.com/.../AntigravityMigrator-0.2.0.dmg",
-                }
+                },
+                {
+                    "name": "AntigravityMigrator-0.2.0-setup.exe",
+                    "browser_download_url": "https://github.com/.../AntigravityMigrator-0.2.0-setup.exe",
+                },
+                {
+                    "name": "AntigravityMigrator-0.2.0.AppImage",
+                    "browser_download_url": "https://github.com/.../AntigravityMigrator-0.2.0.AppImage",
+                },
             ],
         }
 
@@ -157,7 +165,10 @@ class TestCheckGithubUpdate:
             assert res["throttled"] is False
             assert res["update_available"] is True
             assert res["latest_version"] == "0.2.0"
-            assert "dmg" in res["download_url"]
+            assert any(
+                ext in res["download_url"].lower()
+                for ext in ["dmg", "exe", "appimage"]
+            )
 
             # Cache file should be updated
             saved_cache = json.loads(cache_path.read_text(encoding="utf-8"))

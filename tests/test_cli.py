@@ -1,5 +1,4 @@
-"""Tests for Antigravity Chat Migrator CLI commands (audit, fix, watch, rollback)."""
-
+import gc
 import json
 from pathlib import Path
 import sqlite3
@@ -24,9 +23,13 @@ def _create_mock_conversation(db_path: Path, workspace_uri: str, project_id: str
         parts.append(encode_field(18, 2, project_id.encode("utf-8")))
 
     blob = b"".join(parts)
-    with sqlite3.connect(str(db_path)) as conn:
+    conn = sqlite3.connect(str(db_path))
+    try:
         conn.execute("CREATE TABLE IF NOT EXISTS trajectory_metadata_blob (id TEXT PRIMARY KEY, data BLOB)")
         conn.execute("INSERT OR REPLACE INTO trajectory_metadata_blob (id, data) VALUES ('main', ?)", (blob,))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 class TestCliCommands(unittest.TestCase):
@@ -51,6 +54,7 @@ class TestCliCommands(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.patcher.stop()
+        gc.collect()
         self.temp_dir.cleanup()
 
     def test_version_flag(self) -> None:
@@ -80,9 +84,12 @@ class TestCliCommands(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("1", result.output)
         # Verify db was untouched
-        with sqlite3.connect(str(db_file)) as conn:
+        conn = sqlite3.connect(str(db_file))
+        try:
             row = conn.execute("SELECT data FROM trajectory_metadata_blob WHERE id='main'").fetchone()
             self.assertNotIn(b"outside-of-project", row[0])
+        finally:
+            conn.close()
 
     def test_fix_dry_run(self) -> None:
         """fix --dry-run simulates migration without modifying files."""

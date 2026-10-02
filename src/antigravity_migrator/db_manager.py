@@ -7,6 +7,7 @@ with transactional integrity and SQLite busy_timeout protection.
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
@@ -27,6 +28,18 @@ BUSY_TIMEOUT_MS = 5000
 CONNECT_TIMEOUT_SEC = 5.0
 
 
+@contextlib.contextmanager
+def _open_db(path: Union[Path, str]):
+    """Context manager for SQLite connections ensuring clean closure on Windows & POSIX."""
+    conn = sqlite3.connect(str(path), timeout=CONNECT_TIMEOUT_SEC)
+    try:
+        conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
 class DatabaseManager:
     """Manager for Antigravity SQLite databases."""
 
@@ -42,8 +55,7 @@ class DatabaseManager:
             return None
 
         try:
-            with sqlite3.connect(str(path), timeout=CONNECT_TIMEOUT_SEC) as conn:
-                conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+            with _open_db(path) as conn:
                 cur = conn.cursor()
                 cur.execute(
                     "SELECT data FROM trajectory_metadata_blob WHERE id = 'main'"
@@ -88,8 +100,7 @@ class DatabaseManager:
         if not path.is_file():
             return None
         try:
-            with sqlite3.connect(str(path), timeout=CONNECT_TIMEOUT_SEC) as conn:
-                conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+            with _open_db(path) as conn:
                 cur = conn.cursor()
                 cur.execute(
                     "SELECT data FROM trajectory_metadata_blob WHERE id = 'main'"
@@ -128,8 +139,7 @@ class DatabaseManager:
             if not path.parent.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
 
-            with sqlite3.connect(str(path), timeout=CONNECT_TIMEOUT_SEC) as conn:
-                conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+            with _open_db(path) as conn:
                 conn.execute(
                     "CREATE TABLE IF NOT EXISTS trajectory_metadata_blob ("
                     "id TEXT PRIMARY KEY DEFAULT 'main', "
@@ -157,8 +167,7 @@ class DatabaseManager:
             return {}
 
         try:
-            with sqlite3.connect(str(path), timeout=CONNECT_TIMEOUT_SEC) as conn:
-                conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+            with _open_db(path) as conn:
                 cur = conn.cursor()
                 cur.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_summaries'"
@@ -203,8 +212,7 @@ class DatabaseManager:
             if not path.parent.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
 
-            with sqlite3.connect(str(path), timeout=CONNECT_TIMEOUT_SEC) as conn:
-                conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+            with _open_db(path) as conn:
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS conversation_summaries (

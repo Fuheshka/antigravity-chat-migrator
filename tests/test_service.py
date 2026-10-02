@@ -372,7 +372,7 @@ class TestMigratorService(unittest.TestCase):
         )
         res_dict = res.to_dict()
         self.assertTrue(res_dict["success"])
-        self.assertEqual(res_dict["backup_path"], "/tmp/backup")
+        self.assertEqual(res_dict["backup_path"], str(Path("/tmp/backup")))
 
     def test_constructor_with_string_paths(self) -> None:
         service = MigratorService(
